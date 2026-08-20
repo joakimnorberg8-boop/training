@@ -1,0 +1,16 @@
+<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"><meta name="theme-color" content="#0d0c14"><title>Profile — GAYM</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="styles.css?v=rc37"><link rel="stylesheet" href="layout-rc37.css?v=1">
+</head>
+<body><div class="app-shell"><header class="topbar"><a class="wordmark" href="index.html">GAY<span>M</span></a><div class="page-status"><span class="pulse-dot"></span> YOUR SETTINGS</div><a class="profile-button profile-link" href="profile.html">AK</a></header>
+<main class="profile-main"><a class="back-link" href="index.html">Back to dashboard</a>
+<section class="profile-hero"><div class="profile-avatar" id="profile-avatar">AK</div><div><p class="eyebrow">LOCAL PROFILE · FRONTEND PREVIEW</p><h1 id="profile-heading">Your profile.</h1><p>This is stored only on this device until accounts are connected later.</p></div></section>
+<form class="profile-form" id="profile-form">
+<section class="profile-section"><h2>Basic info</h2><div class="profile-grid"><label>NAME<input name="name" placeholder="Jocke"></label><label>WEIGHT <span>kg</span><input name="weight" type="number" step="0.1"></label><label>HEIGHT <span>cm</span><input name="height" type="number"></label><label>AGE<input name="age" type="number"></label></div></section>
+<section class="profile-section"><h2>Goal</h2><div class="profile-choice-grid"><label><input type="radio" name="goal" value="muscle"><span>Muskelbyggande<small>2,0 g protein/kg</small></span></label><label><input type="radio" name="goal" value="loss"><span>Viktminskning<small>Kontrollerat underskott</small></span></label><label><input type="radio" name="goal" value="maintain"><span>Maintain weight<small>Around maintenance</small></span></label></div></section>
+<section class="profile-section"><h2>Activity level</h2><select name="activity"><option value="1.35">Low</option><option value="1.55">Medel</option><option value="1.725">High</option></select></section>
+<section class="profile-section"><h2>App</h2><label class="setting-toggle"><input name="compact" type="checkbox"><span>Kompakt mobilvy<small>Smaller cards and tighter layout</small></span></label></section>
+<button class="profile-save" type="submit">SAVE PROFILE</button><p class="profile-feedback" id="profile-feedback"></p><button class="profile-logout" type="button" data-logout>LOG OUT</button></form>
+</main></div><script src="profile.js"></script>
+
+<script src="app-core.js?v=rc37"></script>
+</body></html>

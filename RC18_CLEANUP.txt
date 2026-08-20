@@ -1,0 +1,7 @@
+GAYM RC18 CLEANUP
+- Bundled shared data + UI helpers into app-core.js.
+- Removed unused sass-pass.js and obsolete RC16 notes.
+- Kept food-nav.js because RC17 uses it for the fixed cost-category navigation.
+- Reduced service-worker pre-cache to stable shell assets only.
+- Preserved all page-specific scripts and localStorage keys.
+- No data migration required.

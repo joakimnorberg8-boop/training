@@ -1,0 +1,7 @@
+GAYM RC19
+- Food category/navigation links now land directly at the meal browser/list.
+- Filtered recipe URLs also scroll to the recipe list after dynamic rendering.
+- Diary has a clear Logga kroppsmått action for weight, waist, biceps, thighs, calves, chest, hips and neck.
+- Body progress has a Logga nya mått CTA that opens the Diary measurement drawer automatically.
+- Removed duplicate Diary intro sentence.
+- Cache/version identifiers bumped for changed assets.

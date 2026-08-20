@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+  <meta name="theme-color" content="#0d0c14">
+  <title>Choose your workout fantasy — GAYM</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=rc37">
+<link rel="stylesheet" href="layout-rc37.css?v=1">
+</head>
+<body class="workout-page">
+<div class="app-shell">
+<header class="topbar">
+  <a class="wordmark" href="index.html">GAY<span>M</span></a>
+  <div class="page-status"><span class="pulse-dot"></span> TWUNKIFICATION DEPARTMENT</div>
+  <a class="profile-button profile-link" href="profile.html">AK</a>
+</header>
+<main class="workout-main type-menu-main">
+  <a class="back-link" href="index.html">Back to dashboard</a>
+  <section class="workout-heading type-heading">
+    <p class="eyebrow">VÄLJ TRÄNING</p>
+    <h1>Vad tränar vi<br><em>idag?</em></h1>
+    <p>Välj styrka, kondition, rumpfokus eller bygg ett eget pass.</p>
+  </section>
+
+  <section class="workout-type-grid" aria-label="Choose workout type">
+    <a class="type-card type-strength" href="strength.html">
+      <div class="type-card-top"><span>01</span><span></span></div>
+      <div class="type-art">P/P/L</div>
+      <div class="type-copy">
+        <p class="option-kicker">STRENGTH · THE FULL PACKAGE</p>
+        <h2>Push / Pull / Legs</h2>
+        <p>Chest, back, legs and arms. Full wardrobe, no filler.</p>
+        <strong>CHOOSE YOUR SPLIT</strong>
+      </div>
+    </a>
+
+    <a class="type-card type-cardio" href="cardio.html">
+      <div class="type-card-top"><span>02</span><span>RUN</span></div>
+      <div class="type-art">HOT</div>
+      <div class="type-copy">
+        <p class="option-kicker">TWINK EVACUATION DRILL</p>
+        <h2>Run Like Daddy Said He’s Outside</h2>
+        <p>Heart rate up, eyes forward. Cardio that leaves the treadmill needing a cigarette.</p>
+        <strong>START CARDIO</strong>
+      </div>
+    </a>
+
+    <a class="type-card type-glutes" href="glutes.html">
+      <div class="type-card-top"><span>03</span><span>GLT</span></div>
+      <div class="type-art">ASS</div>
+      <div class="type-copy">
+        <p class="option-kicker">GLUTE FOCUS · REAR VIEW</p>
+        <h2>Built From Behind</h2>
+        <p>Glutes first. Everything else can wait in the lobby. Build the ass your jockstrap keeps filing complaints about.</p>
+        <strong>GIVE GLUTES THE LEAD</strong>
+      </div>
+    </a>
+
+    <a class="type-card type-custom" href="workout-detail.html?day=custom&fresh=1#custom" data-custom-workout-link>
+      <div class="type-card-top"><span>04</span><span>＋</span></div>
+      <div class="type-art">DIY</div>
+      <div class="type-copy">
+        <p class="option-kicker">NO PLAN · JUST QUESTIONABLE JUDGMENT</p>
+        <h2>Custom workout</h2>
+        <p>Pick your poison. Build the body. Bad decisions, now with progressive overload.</p>
+        <strong>BUILD YOUR OWN BAD DECISIONS</strong>
+      </div>
+    </a>
+
+    <a class="type-card type-daniel" href="daniel.html">
+      <div class="type-card-top"><span>05</span><span></span></div>
+      <div class="type-art">DAN</div>
+      <div class="type-copy">
+        <p class="option-kicker">STRENGTH · CUSTOM PROGRAM</p>
+        <h2>Daniel's Training Program</h2>
+        <p>Back, chest, legs and shoulders across four days. Breathe on days 3 and 6.</p>
+        <strong>RUN DANIEL'S PROGRAM</strong>
+      </div>
+    </a>
+  </section>
+</main>
+<footer class="footer"><span>GAYM / TRAIN LOUD</span><span>Pick a lane. Make daddy look twice.</span></footer>
+</div>
+
+<button class="measure-tab" id="measure-tab" type="button" aria-controls="measure-drawer" aria-expanded="false">
+  <span>MEASURE</span><strong>MEASURE</strong>
+</button>
+
+<div class="measure-drawer" id="measure-drawer" aria-hidden="true">
+  <div class="measure-backdrop" data-close-measures></div>
+  <aside class="measure-panel">
+    <div class="measure-header">
+      <div><p class="eyebrow">JOCKSTRAP FIT REPORT</p><h2>Measure the consequences.</h2><p>Log weight and body measurements here. Progress lives in the Diary.</p></div>
+      <button class="measure-close" type="button" data-close-measures>×</button>
+    </div>
+
+    <form id="measure-form" class="measure-form">
+      <div class="measure-primary">
+        <label>BODY WEIGHT <span>kg</span><input id="measure-weight" name="weight" type="number" inputmode="decimal" step="0.1" min="30" max="300" placeholder="70.0"></label>
+        <label>WAIST <span>cm</span><input id="measure-waist" name="waist" type="number" inputmode="decimal" step="0.1" min="40" max="250" placeholder="80.0"></label>
+      </div>
+
+      <details class="measure-more" open>
+        <summary>More body measurements <span>＋</span></summary>
+        <div class="measure-grid">
+          <label>CHEST <span>cm</span><input name="chest" type="number" inputmode="decimal" step="0.1" placeholder="95.0"></label>
+          <label>HIPS <span>cm</span><input name="hips" type="number" inputmode="decimal" step="0.1" placeholder="92.0"></label>
+          <label>LEFT BICEPS <span>cm</span><input name="bicepsLeft" type="number" inputmode="decimal" step="0.1" placeholder="34.0"></label>
+          <label>RIGHT BICEPS <span>cm</span><input name="bicepsRight" type="number" inputmode="decimal" step="0.1" placeholder="34.0"></label>
+          <label>LEFT THIGH <span>cm</span><input name="thighLeft" type="number" inputmode="decimal" step="0.1" placeholder="55.0"></label>
+          <label>RIGHT THIGH <span>cm</span><input name="thighRight" type="number" inputmode="decimal" step="0.1" placeholder="55.0"></label>
+          <label>LEFT CALF <span>cm</span><input name="calfLeft" type="number" inputmode="decimal" step="0.1" placeholder="37.0"></label>
+          <label>RIGHT CALF <span>cm</span><input name="calfRight" type="number" inputmode="decimal" step="0.1" placeholder="37.0"></label>
+          <label>NECK <span>cm</span><input name="neck" type="number" inputmode="decimal" step="0.1" placeholder="38.0"></label>
+        </div>
+      </details>
+
+      <label class="measure-note">NOTE <textarea name="note" rows="2" placeholder="T.ex. morgonvikt, innan frukost..."></textarea></label>
+      <button class="measure-save" type="submit">SAVE TODAY'S MEASUREMENTS</button>
+      <p class="measure-feedback" id="measure-feedback"></p>
+    </form>
+
+    <section class="measure-recent">
+      <div class="measure-recent-head"><span>RECENT LOGS</span><a href="body-progress.html">View progress</a></div>
+      <div id="measure-recent-list"></div>
+    </section>
+  </aside>
+</div>
+
+<script src="body-measurements.js?v=safari-mobile-fix-1"></script>
+
+<script src="app-core.js?v=rc37"></script>
+<script>
+document.querySelector('[data-custom-workout-link]')?.addEventListener('click',()=>{
+  sessionStorage.setItem('gaym-selected-strength-day','custom');
+  localStorage.setItem('gaym-last-strength-day','custom');
+});
+</script>
+</body>
+</html>

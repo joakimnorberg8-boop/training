@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"><meta name="theme-color" content="#0d0c14">
+<title>Stats & diary — GAYM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="styles.css?v=rc37"><link rel="stylesheet" href="layout-rc37.css?v=1">
+</head>
+<body><div class="app-shell">
+<header class="topbar"><a class="wordmark" href="index.html">GAY<span>M</span></a><div class="page-status"><span class="pulse-dot"></span> THE FULL RECEIPTS</div><a class="profile-button profile-link" href="profile.html">AK</a></header>
+<main class="daily-main"><a class="back-link" href="index.html">Back to dashboard</a>
+<section class="daily-hero compact-diary-hero">
+  <p class="eyebrow">THE GAY RECEIPTS™ · NOTHING ESCAPES THE PAPER TRAIL</p>
+  <h1>Day by<br><em>day.</em></h1>
+  <p>Each day has its own tab. Open the day you want to inspect.</p>
+</section>
+
+<section class="diary-analysis">
+  <div><p class="eyebrow">WANT THE NERDY DETAILS?</p><h2>Progress charts are optional.</h2></div>
+  <div class="analysis-links">
+    <a href="history.html"><span>STRENGTH</span><strong>View progress</strong></a>
+    <a href="body-progress.html"><span>BODY</span><strong>View progress</strong></a>
+    <a href="food-stats.html"><span>FOOD</span><strong>View progress</strong></a>
+  </div>
+  <button class="diary-log-measure" type="button" data-open-measures><span>＋</span><strong>Logga kroppsmått</strong><small>Vikt, midja, biceps, lår och mer</small></button>
+</section>
+
+<section class="timeline-head simplified-timeline-head">
+  <div><p class="eyebrow">HISTORIK</p><h2>Choose a day</h2></div>
+  <div class="timeline-filters">
+    <button class="active" data-type="all">ALLT</button>
+    <button data-type="workout">TRAINING</button>
+    <button data-type="food">FOOD</button>
+    <button data-type="cardio">KONDITION</button>
+    <button data-type="measure">MEASURE</button>
+  </div>
+</section>
+<section class="daily-timeline" id="daily-timeline"></section>
+</main></div>
+<div class="history-edit-modal" id="history-edit-modal" aria-hidden="true">
+  <div class="history-edit-backdrop" data-history-close></div>
+  <div class="history-edit-panel">
+    <div class="history-edit-header">
+      <div><p class="eyebrow">EDIT RECEIPT</p><h2 id="history-edit-title">Edit</h2></div>
+      <button type="button" data-history-close>×</button>
+    </div>
+    <div id="history-edit-body"></div>
+    <div class="history-edit-actions">
+      <button type="button" class="danger" id="history-delete">DELETE</button>
+      <button type="button" class="save" id="history-save">SAVE CHANGES</button>
+    </div>
+  </div>
+</div>
+<script src="daily.js?v=daily-food-group-1"></script>
+<button class="measure-tab" id="measure-tab" type="button" aria-controls="measure-drawer" aria-expanded="false">
+  <span>MEASURE</span><strong>MEASURE</strong>
+</button>
+
+<div class="measure-drawer" id="measure-drawer" aria-hidden="true">
+  <div class="measure-backdrop" data-close-measures></div>
+  <aside class="measure-panel">
+    <div class="measure-header">
+      <div><p class="eyebrow">JOCKSTRAP FIT REPORT</p><h2>Measure the consequences.</h2><p>Log weight and body measurements here. Progress lives in the Diary.</p></div>
+      <button class="measure-close" type="button" data-close-measures>×</button>
+    </div>
+
+    <form id="measure-form" class="measure-form">
+      <div class="measure-primary">
+        <label>BODY WEIGHT <span>kg</span><input id="measure-weight" name="weight" type="number" inputmode="decimal" step="0.1" min="30" max="300" placeholder="70.0"></label>
+        <label>WAIST <span>cm</span><input id="measure-waist" name="waist" type="number" inputmode="decimal" step="0.1" min="40" max="250" placeholder="80.0"></label>
+      </div>
+
+      <details class="measure-more" open>
+        <summary>More body measurements <span>＋</span></summary>
+        <div class="measure-grid">
+          <label>CHEST <span>cm</span><input name="chest" type="number" inputmode="decimal" step="0.1" placeholder="95.0"></label>
+          <label>HIPS <span>cm</span><input name="hips" type="number" inputmode="decimal" step="0.1" placeholder="92.0"></label>
+          <label>LEFT BICEPS <span>cm</span><input name="bicepsLeft" type="number" inputmode="decimal" step="0.1" placeholder="34.0"></label>
+          <label>RIGHT BICEPS <span>cm</span><input name="bicepsRight" type="number" inputmode="decimal" step="0.1" placeholder="34.0"></label>
+          <label>LEFT THIGH <span>cm</span><input name="thighLeft" type="number" inputmode="decimal" step="0.1" placeholder="55.0"></label>
+          <label>RIGHT THIGH <span>cm</span><input name="thighRight" type="number" inputmode="decimal" step="0.1" placeholder="55.0"></label>
+          <label>LEFT CALF <span>cm</span><input name="calfLeft" type="number" inputmode="decimal" step="0.1" placeholder="37.0"></label>
+          <label>RIGHT CALF <span>cm</span><input name="calfRight" type="number" inputmode="decimal" step="0.1" placeholder="37.0"></label>
+          <label>NECK <span>cm</span><input name="neck" type="number" inputmode="decimal" step="0.1" placeholder="38.0"></label>
+        </div>
+      </details>
+
+      <label class="measure-note">NOTE <textarea name="note" rows="2" placeholder="T.ex. morgonvikt, innan frukost..."></textarea></label>
+      <button class="measure-save" type="submit">SAVE TODAY'S MEASUREMENTS</button>
+      <p class="measure-feedback" id="measure-feedback"></p>
+    </form>
+
+    <section class="measure-recent">
+      <div class="measure-recent-head"><span>RECENT LOGS</span><a href="body-progress.html">View progress</a></div>
+      <div id="measure-recent-list"></div>
+    </section>
+  </aside>
+</div>
+
+<script src="body-measurements.js?v=rc19"></script>
+
+<script src="app-core.js?v=rc37"></script>
+</body></html>

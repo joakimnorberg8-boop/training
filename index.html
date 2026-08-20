@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+  <meta name="theme-color" content="#0d0c14">
+  <title>GAYM — Training & kost</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=rc37">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="layout-rc37.css?v=1">
+</head>
+<body class="home-menu-page">
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="wordmark" href="#top" aria-label="GAYM startsida">GAY<span>M</span></a>
+      <a class="profile-button profile-link" href="profile.html">AK</a>
+    </header>
+
+    <main id="top">
+  <section class="welcome-hero">
+    <div class="welcome-copy">
+      <p class="eyebrow">TWINK DEVELOPMENT PROGRAM</p>
+      <h1>What are we<br><em>doing?</em></h1>
+      <div class="welcome-actions">
+        <a class="welcome-primary" href="workout.html">STARTA PASS <span></span></a>
+      </div>
+    </div>
+  </section>
+
+  <section class="home-fuel" aria-labelledby="fuel-heading">
+    <a class="home-fuel-card" href="recipes.html?category=all">
+      <div class="home-fuel-copy">
+        <div class="home-fuel-top"><p class="eyebrow" id="fuel-heading">TODAY'S FUEL</p><span id="fuel-profile">MUSKELBYGGANDE · 70 KG</span></div>
+        <strong id="fuel-calories">0 / 2 400 kcal</strong>
+        <div class="home-fuel-bar" role="progressbar" aria-label="Dagens kalorier" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="fuel-progress"></span></div>
+        <small id="fuel-detail">0 / 140 g protein · Muskelbyggande · 70 kg</small>
+      </div>
+      <div class="home-fuel-action"><span id="fuel-percent">0%</span><b>RECIPES</b></div>
+    </a>
+  </section>
+
+  <section class="home-menu" aria-label="Huvudval">
+    <p class="eyebrow">OR GO HERE</p>
+    <div class="home-menu-grid">
+      <a class="home-menu-item" href="recipes.html?category=all"><span>01 · FUEL</span><strong>Recipes</strong><small>Calories, protein and snacks with ambition.</small><b>OPEN</b></a>
+      <a class="home-menu-item" href="history.html"><span>02 · RECEIPTS</span><strong>Se statistik</strong><small>PBs, weight and reps. Receipts for the gains.</small><b>OPEN</b></a>
+      <a class="home-menu-item" href="daily.html"><span>03 · FULL DISCLOSURE</span><strong>Diary</strong><small>Training and food, day by day.</small><b>OPEN</b></a>
+      <button class="home-menu-item" type="button" data-open-measures><span>04 · JOCKSTRAP FIT REPORT</span><strong>Today's measurements</strong><small>Weight and body measurements without the drama.</small><b>OPEN</b></button>
+    </div>
+  </section>
+
+  <section class="mobile-home-main" aria-label="Mobile dashboard">
+    <p class="mobile-home-date" id="home-date"></p>
+    <h1 id="home-greeting">Hej Jocke! 👋</h1>
+
+    <article class="mobile-dashboard-card resume-card" id="resume-card" hidden>
+      <span class="mobile-card-kicker">PASS PÅGÅR</span>
+      <h2 id="resume-label">Workout in progress</h2>
+      <p>Fortsätt där du slutade.</p>
+      <a class="mobile-primary" id="resume-link" href="workout.html">FORTSÄTT PASS</a>
+    </article>
+
+    <article class="mobile-dashboard-card">
+      <div class="mobile-pass-head">
+        <div><span class="mobile-card-kicker">DAGENS PASS</span><h2>Redo för dagens träning?</h2><p>Välj pass och börja logga.</p></div>
+        <span class="mobile-pass-icon"></span>
+      </div>
+      <a class="mobile-primary" href="workout.html">STARTA PASS</a>
+    </article>
+
+    <article class="mobile-dashboard-card">
+      <span class="mobile-card-kicker">IDAG · KOST</span>
+      <div class="mobile-progress-row"><strong id="mobile-fuel-calories">0 / 2 400 kcal</strong><span id="mobile-fuel-percent">0%</span></div>
+      <div class="mobile-progress"><span id="mobile-fuel-progress"></span></div>
+      <div class="mobile-fuel-note"><span id="mobile-fuel-protein">0 / 140 g protein</span><span id="mobile-fuel-left">Log food</span></div>
+      <a class="mobile-primary" href="recipes.html?category=all">LÄGG TILL MÅLTID</a>
+    </article>
+
+    <article class="mobile-dashboard-card resume-card" id="food-resume-card" hidden>
+      <span class="mobile-card-kicker">DAGENS KOST</span>
+      <h2>Fortsätt logga</h2><p id="food-resume-copy"></p>
+      <a class="mobile-primary" href="recipes.html?category=all">FORTSÄTT</a>
+    </article>
+
+    <div class="mobile-quick-grid">
+      <a class="quick-neon quick-diary" href="daily.html"><span class="quick-line-icon" aria-hidden="true"></span><strong>Diary</strong><small>SE DIN VECKA</small></a>
+      <a class="quick-neon quick-progress" href="history.html"><span></span><strong>Progress</strong><small>FÖLJ UTVECKLINGEN</small></a>
+      <button class="quick-neon quick-measure" type="button" data-open-measures><span>＋</span><strong>Mätning</strong><small>VIKT & MÅTT</small></button>
+      
+    </div>
+  </section>
+</main>
+
+    <footer class="footer"><span>GAYM / TRAIN LOUD</span><span>Made for every body, baby.</span></footer>
+  </div>
+<script src="app.js"></script>
+
+<script>
+(() => {
+  const dateLabel=document.getElementById('today-date');
+  if(dateLabel){
+    dateLabel.textContent=new Intl.DateTimeFormat('en-GB',{weekday:'long',day:'numeric',month:'long'}).format(new Date()).toUpperCase();
+  }
+})();
+</script>
+<script src="home-fuel.js?v=profile-targets-1"></script>
+<script src="home-mobile.js?v=mobile-2"></script>
+
+<div class="measure-drawer" id="measure-drawer" aria-hidden="true">
+  <div class="measure-backdrop" data-close-measures></div>
+  <aside class="measure-panel">
+    <div class="measure-header">
+      <div><p class="eyebrow">JOCKSTRAP FIT REPORT</p><h2>Measure the consequences.</h2><p>Log weight and body measurements here. Progress lives in the Diary.</p></div>
+      <button class="measure-close" type="button" data-close-measures>×</button>
+    </div>
+
+    <form id="measure-form" class="measure-form">
+      <div class="measure-primary">
+        <label>BODY WEIGHT <span>kg</span><input id="measure-weight" name="weight" type="number" inputmode="decimal" step="0.1" min="30" max="300" placeholder="70.0"></label>
+        <label>WAIST <span>cm</span><input id="measure-waist" name="waist" type="number" inputmode="decimal" step="0.1" min="40" max="250" placeholder="80.0"></label>
+      </div>
+
+      <details class="measure-more" open>
+        <summary>More body measurements <span>＋</span></summary>
+        <div class="measure-grid">
+          <label>CHEST <span>cm</span><input name="chest" type="number" inputmode="decimal" step="0.1" placeholder="95.0"></label>
+          <label>HIPS <span>cm</span><input name="hips" type="number" inputmode="decimal" step="0.1" placeholder="92.0"></label>
+          <label>LEFT BICEPS <span>cm</span><input name="bicepsLeft" type="number" inputmode="decimal" step="0.1" placeholder="34.0"></label>
+          <label>RIGHT BICEPS <span>cm</span><input name="bicepsRight" type="number" inputmode="decimal" step="0.1" placeholder="34.0"></label>
+          <label>LEFT THIGH <span>cm</span><input name="thighLeft" type="number" inputmode="decimal" step="0.1" placeholder="55.0"></label>
+          <label>RIGHT THIGH <span>cm</span><input name="thighRight" type="number" inputmode="decimal" step="0.1" placeholder="55.0"></label>
+          <label>LEFT CALF <span>cm</span><input name="calfLeft" type="number" inputmode="decimal" step="0.1" placeholder="37.0"></label>
+          <label>RIGHT CALF <span>cm</span><input name="calfRight" type="number" inputmode="decimal" step="0.1" placeholder="37.0"></label>
+          <label>NECK <span>cm</span><input name="neck" type="number" inputmode="decimal" step="0.1" placeholder="38.0"></label>
+        </div>
+      </details>
+
+      <label class="measure-note">NOTE <textarea name="note" rows="2" placeholder="T.ex. morgonvikt, innan frukost..."></textarea></label>
+      <button class="measure-save" type="submit">SAVE TODAY'S MEASUREMENTS</button>
+      <p class="measure-feedback" id="measure-feedback"></p>
+    </form>
+
+    <section class="measure-recent">
+      <div class="measure-recent-head"><span>RECENT LOGS</span><a href="body-progress.html">View progress</a></div>
+      <div id="measure-recent-list"></div>
+    </section>
+  </aside>
+</div>
+
+<script src="body-measurements.js?v=home-menu-1"></script>
+
+<script>
+  document.querySelectorAll('[data-open-measures]').forEach(button => button.addEventListener('click', () => {
+    const drawer = document.getElementById('measure-drawer');
+    if (!drawer) return;
+    drawer.classList.add('open');
+    drawer.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('measure-open');
+  }));
+</script>
+
+<script src="app-core.js?v=rc37"></script>
+</body>
+</html>

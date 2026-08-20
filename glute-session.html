@@ -1,0 +1,36 @@
+<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover"><meta name="theme-color" content="#0d0c14"><title>Rumpass — GAYM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"><link rel="stylesheet" href="styles.css?v=rc37"><link rel="stylesheet" href="layout-rc37.css?v=1">
+</head>
+<body class="active-workout-page"><div class="app-shell"><header class="topbar"><a class="wordmark" href="index.html">GAY<span>M</span></a><div class="page-status"><span class="pulse-dot"></span> TRÄNING</div><a class="profile-button profile-link" href="profile.html">AK</a></header>
+<main class="day-detail-main"><a class="back-link" href="glutes.html">Glute workouts</a>
+<section class="day-hero"><div><p class="eyebrow" id="glute-kicker"></p><h1 id="glute-title"></h1><p id="glute-subtitle"></p></div><div class="day-completion"><strong id="glute-done">0</strong>/<span id="glute-total">0</span><small> EXERCISES DONE</small></div><div class="session-timer-chip" id="glute-session-timer-chip"><button type="button" id="glute-session-start-button" class="session-start-button">START WORKOUT ▶</button><div class="session-timer-display" id="glute-session-timer-display" hidden><strong id="glute-session-timer">0:00</strong><small>WORKOUT IN PROGRESS</small></div></div></section>
+<div class="detail-progress"><span id="glute-progress"></span></div>
+<section class="saved-custom-exercises" id="saved-custom-exercises" hidden>
+  <button class="saved-custom-toggle" id="saved-custom-toggle" type="button" aria-expanded="false">
+    <span>✦</span><strong>MY EXERCISES</strong><small id="saved-custom-count">0</small>
+  </button>
+  <div class="saved-custom-panel" id="saved-custom-panel" hidden>
+    <div class="saved-custom-head"><span>SAVED CUSTOM EXERCISES</span><small>Tap + to add to today's workout</small></div>
+    <div class="saved-custom-list" id="saved-custom-list"></div>
+  </div>
+</section>
+<section class="all-exercises" id="glute-exercises"></section>
+<button class="add-exercise-main compact-add" id="glute-add" type="button"><span>＋</span><div><strong>Add exercise</strong><small>Choose from the library or create your own</small></div></button>
+<div class="sticky-workout-tools"><button class="finish-day-button" id="glute-finish" type="button">LOG WORKOUT</button></div>
+</main></div>
+<div class="exercise-modal" id="glute-modal"><div class="exercise-modal-backdrop" data-glute-close></div><div class="exercise-modal-panel"><div class="modal-header"><div><p class="eyebrow">LÄGG TILL ÖVNING</p><h2>Add exercise</h2></div><button class="modal-close" data-glute-close>×</button></div><div class="modal-tabs"><button class="modal-tab active" data-glute-tab="library">Library</button><button class="modal-tab" data-glute-tab="custom">Create custom</button></div><div class="modal-view active" id="glute-library-view"><div class="library-list" id="glute-library"></div></div><div class="modal-view" id="glute-custom-view"><div class="custom-exercise-form"><label>NAME<input id="glute-custom-name" placeholder="T.ex. Smith hip thrust"></label><label>KORTNAMN<input id="glute-custom-fun" placeholder="T.ex. Smith & Wesson Peach"></label><div class="custom-form-row"><label>SET<input id="glute-custom-sets" type="number" min="1" value="3"></label><label>REPS<input id="glute-custom-reps" value="10–15"></label></div><button class="create-exercise-button" id="glute-create">CREATE & ADD</button></div></div></div></div>
+<script src="glute-session.js?v=rc37"></script><script src="exercise-rest.js?v=background-rest-1"></script>
+
+<div class="workout-complete-modal" id="workout-complete-modal" aria-hidden="true">
+  <div class="workout-complete-backdrop"></div>
+  <section class="workout-complete-card" role="dialog" aria-modal="true" aria-labelledby="workout-complete-title">
+    <p class="eyebrow" id="workout-complete-kicker">PASS KLART</p>
+    <h2 id="workout-complete-title">Bra jobbat.</h2>
+    <p class="workout-complete-copy" id="workout-complete-copy"></p>
+    <div class="workout-complete-stats" id="workout-complete-stats"></div>
+    <a class="workout-home-button" href="index.html">BACK TO HOME PAGE <span></span></a>
+  </section>
+</div>
+
+<script src="app-core.js?v=rc37"></script>
+</body></html>

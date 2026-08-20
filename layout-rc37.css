@@ -1,0 +1,159 @@
+/* GAYM RC37: clean mobile layout authority.
+   This file intentionally owns viewport-fixed UI so older release rules cannot overlap content. */
+
+html,body{max-width:100%;overflow-x:hidden}
+img,svg,video,canvas{max-width:100%}
+
+@media (max-width:760px){
+  :root{
+    --gaym-nav-h:66px;
+    --gaym-nav-gap:10px;
+    --gaym-action-h:56px;
+    --gaym-action-gap:10px;
+  }
+
+  /* Header belongs to document flow. It must never cover scrolled content. */
+  .topbar,
+  body.rc27-meals-page .topbar,
+  body.active-workout-page .topbar{
+    position:relative!important;
+    top:auto!important;
+    left:auto!important;
+    right:auto!important;
+    z-index:20!important;
+    height:58px!important;
+    min-height:58px!important;
+    background:#08090e!important;
+    backdrop-filter:none!important;
+    -webkit-backdrop-filter:none!important;
+  }
+
+  /* The global phone navigation is the only persistent element at the screen bottom. */
+  body .mobile-bottom-nav,
+  body.active-workout-page .mobile-bottom-nav,
+  body.active-workout-page .mobile-bottom-nav.session-hidden-nav{
+    display:grid!important;
+    visibility:visible!important;
+    opacity:1!important;
+    pointer-events:auto!important;
+    position:fixed!important;
+    left:10px!important;
+    right:10px!important;
+    bottom:calc(8px + env(safe-area-inset-bottom))!important;
+    width:auto!important;
+    min-height:var(--gaym-nav-h)!important;
+    z-index:5000!important;
+  }
+
+  /* Every normal page reserves room for the global nav. */
+  body{padding-bottom:calc(var(--gaym-nav-h) + 28px + env(safe-area-inset-bottom))!important}
+  .app-shell{padding-bottom:0!important}
+
+  /* Old floating helpers caused several of the small overlaps. On mobile their functions
+     are available through Diary / the global nav, so they are no longer floating. */
+  .active-session-tab,
+  .measure-tab{display:none!important}
+
+  /* Workout action: one button, fixed above the global nav, with real scroll clearance. */
+  body.active-workout-page .session-start-button{
+    display:flex!important;
+    visibility:visible!important;
+    align-items:center!important;
+    justify-content:center!important;
+    position:fixed!important;
+    left:12px!important;
+    right:12px!important;
+    bottom:calc(var(--gaym-nav-h) + 24px + env(safe-area-inset-bottom))!important;
+    width:auto!important;
+    height:var(--gaym-action-h)!important;
+    min-height:var(--gaym-action-h)!important;
+    max-height:var(--gaym-action-h)!important;
+    margin:0!important;
+    padding:0 18px!important;
+    border:0!important;
+    border-radius:15px!important;
+    background:linear-gradient(105deg,#ff176f,#ee275e)!important;
+    color:#fff!important;
+    z-index:4500!important;
+    box-shadow:0 10px 28px rgba(0,0,0,.35)!important;
+  }
+
+  /* The timer stays in normal flow. The button is removed from this box visually. */
+  body.active-workout-page .session-timer-chip{
+    position:static!important;
+    display:block!important;
+    min-height:0!important;
+    margin:8px 0 0!important;
+    padding:0!important;
+    border:0!important;
+    background:transparent!important;
+  }
+  body.active-workout-page .session-timer-display{
+    position:static!important;
+    margin:0!important;
+    padding:7px 0 0!important;
+    text-align:left!important;
+  }
+
+  /* Enough real document space to scroll every exercise, input and add button completely
+     above BOTH persistent bottom layers. */
+  body.active-workout-page .day-detail-main,
+  body.active-workout-page .cardio-session-main{
+    padding-bottom:calc(var(--gaym-nav-h) + var(--gaym-action-h) + 72px + env(safe-area-inset-bottom))!important;
+  }
+  body.active-workout-page .all-exercises,
+  body.active-workout-page .add-exercise-zone,
+  body.active-workout-page .day-exercise-card,
+  body.active-workout-page .next-exercise-picker{
+    scroll-margin-bottom:calc(var(--gaym-nav-h) + var(--gaym-action-h) + 48px)!important;
+  }
+  body.active-workout-page .add-exercise-zone{margin-bottom:18px!important}
+
+  /* When a dialog is open, never let the workout action sit on top of its controls. */
+  body.active-workout-page:has(.exercise-modal.open) .session-start-button,
+  body.active-workout-page:has(.workout-complete-modal.show) .session-start-button,
+  body.active-workout-page:has(.finish-screen.show) .session-start-button,
+  body.active-workout-page:has(.measure-drawer.open) .session-start-button{
+    display:none!important;
+  }
+
+  /* Modal content gets its own scrolling area instead of extending behind screen controls. */
+  .exercise-modal-panel,
+  .custom-food-panel,
+  .history-edit-panel,
+  .measure-panel{
+    max-height:100dvh!important;
+    overflow-y:auto!important;
+    overscroll-behavior:contain;
+    padding-bottom:calc(28px + env(safe-area-inset-bottom))!important;
+  }
+
+  /* Workout set controls may shrink but may never spill outside the card. */
+  .day-exercise-card,.set-table,.set-row,.weight-stepper{min-width:0!important;max-width:100%!important}
+  .set-row{width:100%!important}
+  .set-row input{min-width:0!important;max-width:100%!important}
+  .weight-stepper{grid-template-columns:30px minmax(0,1fr) 30px!important}
+  .weight-stepper button{min-width:0!important;width:30px!important;padding:0!important}
+
+  /* Food/favorites: the GAYM header no longer sticks while scrolling. Toast floats briefly
+     without creating a black header slab or blocking recipe interaction. */
+  .rc32-favorite-toast{
+    top:calc(env(safe-area-inset-top) + 10px)!important;
+    z-index:7000!important;
+    pointer-events:none!important;
+  }
+  body.rc27-meals-page .rc27-meals-main{padding-bottom:26px!important}
+  .rc27-meal-card{contain:layout paint!important}
+  .rc27-card-main,.rc27-card-copy,.rc27-card-actions{min-width:0!important}
+}
+
+@media (max-width:390px){
+  .set-row{
+    grid-template-columns:38px minmax(0,1.45fr) minmax(52px,.75fr) 38px!important;
+    gap:5px!important;
+  }
+  .set-row label{font-size:.5rem!important}
+  .set-done{width:36px!important;height:36px!important;min-width:36px!important}
+  .weight-stepper{grid-template-columns:28px minmax(0,1fr) 28px!important;gap:3px!important}
+  .weight-stepper button{width:28px!important;height:42px!important}
+}

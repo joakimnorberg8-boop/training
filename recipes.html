@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<meta name="theme-color" content="#0d0c14">
+<title>Meals — GAYM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css?v=rc37">
+<link rel="stylesheet" href="layout-rc37.css?v=1">
+</head>
+<body class="rc27-meals-page">
+<div class="app-shell">
+<header class="topbar">
+  <a class="wordmark" href="index.html">GAY<span>M</span></a>
+  <div class="page-status"><span class="pulse-dot"></span> TWUNK NUTRITION SERVICES</div>
+  <a class="profile-button profile-link" href="profile.html">AK</a>
+</header>
+<main class="rc27-meals-main">
+  <section class="rc27-greeting">
+    <div><h1 id="rc27-greeting-name">Hi! 👋</h1><p id="rc27-greeting-date"></p></div>
+    <div class="rc27-streak">🔥 <strong id="rc27-streak-value">0</strong> day streak</div>
+  </section>
+
+  <section class="rc27-nutrition" id="meal-goal-summary">
+    <div class="rc27-nutrition-head">
+      <div><h2>Today's nutrition</h2><p>Calories, protein and today's selected meals.</p></div>
+    </div>
+    <div class="summary-numbers rc27-summary-numbers" id="summary-numbers"></div>
+    <div class="selected-meals rc27-selected-meals" id="selected-meals"></div>
+    <button class="save-food-day rc27-save-day" id="save-food-day" type="button">SAVE &amp; LOG DAY</button>
+    <div class="topup-suggestions" id="topup-suggestions"></div>
+  </section>
+
+  <section class="rc27-meals-section" id="recipe-list">
+    <div class="rc27-meals-heading">
+      <h2>Meals</h2>
+      <button class="rc27-add-custom" id="open-custom-food" type="button"><span>＋</span> Add custom meal</button>
+    </div>
+
+    <nav class="rc27-recipe-bank" aria-label="Recipe collections">
+      <button type="button" data-bank="all">All recipes</button>
+      <button type="button" data-bank="bottom">Bottom-friendly</button>
+      <button type="button" data-bank="jocke">Jocke</button>
+      <button type="button" data-bank="user">Community</button>
+      <button type="button" data-bank="favorites" class="rc32-favorites-tab">♥ Favorites</button>
+    </nav>
+
+    <label class="rc27-search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="m16 16 4 4"></path></svg>
+      <input id="recipe-search" type="search" placeholder="Search recipes..." autocomplete="off">
+    </label>
+
+    <div class="recipe-grid rc27-recipe-grid" id="recipe-grid"></div>
+  </section>
+</main>
+</div>
+<div class="custom-food-modal" id="custom-food-modal" aria-hidden="true">
+  <div class="custom-food-backdrop" data-close-custom-food></div>
+  <div class="custom-food-panel">
+    <div class="custom-food-head">
+      <div><p class="eyebrow">DIY TWUNK FUEL</p><h2>Build your own bite.</h2><p>Enter the values from the package or your own calculation.</p></div>
+      <button type="button" data-close-custom-food>×</button>
+    </div>
+    <form id="custom-food-form" class="custom-food-form">
+      <label>NAME<input id="custom-food-name" required placeholder="E.g. protein bar"></label>
+      <label>MEAL TYPE
+        <select id="custom-food-meal">
+          <option>Breakfast</option>
+          <option>Snack</option>
+          <option>Lunch</option>
+          <option>Dinner</option>
+          <option>Evening snack</option>
+          <option>Extra / snack</option>
+        </select>
+      </label>
+      <div class="custom-food-row">
+        <label>KCAL<input id="custom-food-kcal" required type="number" min="0" step="1" placeholder="250"></label>
+        <label>PROTEIN <span>g</span><input id="custom-food-protein" required type="number" min="0" step="0.1" placeholder="20"></label>
+      </div>
+      <label>INGREDIENTS <span>one per line</span><textarea id="custom-food-ingredients" rows="4" placeholder="1 proteinbar&#10;200 g yoghurt&#10;Berries"></textarea></label>
+      <label>METHOD<textarea id="custom-food-steps" rows="3" placeholder="Mix everything and serve."></textarea></label>
+      <label class="custom-bottom-label"><input id="custom-food-bottom" type="checkbox"> Mark as Bottom-friendly </label>
+      <button class="custom-food-save" type="submit">SAVE & ADD TO DAY</button>
+      <p class="custom-food-feedback" id="custom-food-feedback"></p>
+    </form>
+  </div>
+</div>
+<div class="rc27-recipe-modal" id="rc27-recipe-modal" aria-hidden="true">
+  <button class="rc27-recipe-backdrop" type="button" data-close-recipe-detail aria-label="Close recipe"></button>
+  <section class="rc27-recipe-sheet" role="dialog" aria-modal="true" aria-labelledby="rc27-recipe-name">
+    <div class="rc27-sheet-handle" aria-hidden="true"></div>
+    <header class="rc27-recipe-head">
+      <img class="rc27-detail-image" id="rc27-detail-image" src="proteinrik-kottgryta.webp" alt="">
+      <div class="rc27-detail-title">
+        <p id="rc27-recipe-meal">RECIPE</p>
+        <h2 id="rc27-recipe-name">Recipe</h2>
+        <div class="rc27-detail-meta"><span id="rc27-recipe-macros"></span><span id="rc27-detail-tag"></span></div>
+      </div>
+      <button class="rc27-recipe-close" type="button" data-close-recipe-detail aria-label="Close">×</button>
+    </header>
+    <div class="rc27-recipe-body">
+      <section><h3>Ingredients</h3><ul id="rc27-recipe-ingredients"></ul></section>
+      <section><h3>Instructions</h3><ol id="rc27-recipe-steps"></ol></section>
+    </div>
+    <button class="rc27-add-from-detail" id="rc27-add-from-detail" type="button">＋ ADD TO TODAY</button>
+  </section>
+</div>
+<script src="recipes.js?v=rc37"></script>
+<script src="app-core.js?v=rc37"></script>
+</body></html>

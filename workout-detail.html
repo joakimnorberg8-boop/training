@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<meta name="theme-color" content="#0d0c14"><title>Workout — GAYM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css?v=rc37">
+<link rel="stylesheet" href="layout-rc37.css?v=1">
+</head>
+<body class="detail-page active-workout-page"><div class="app-shell">
+<header class="topbar"><a class="wordmark" href="index.html">GAY<span>M</span></a><div class="page-status"><span class="pulse-dot"></span> <span id="page-status">WORKOUT</span></div><a class="profile-button profile-link" href="profile.html">AK</a></header>
+<main class="day-detail-main">
+<a class="back-link" id="workout-back-link" href="strength.html">All strength workouts</a>
+<section class="day-hero">
+  <div><p class="eyebrow" id="day-label"></p><h1 id="day-title"></h1><p id="day-subtitle"></p></div>
+  <div class="day-completion"><strong id="completed-count">0</strong>/<span id="exercise-count">0</span><small> EXERCISES DONE</small></div>
+  <div class="session-timer-chip" id="session-timer-chip">
+    <button type="button" id="session-start-button" class="session-start-button">START WORKOUT ▶</button>
+    <div class="session-timer-display" id="session-timer-display" hidden><strong id="session-timer">0:00</strong><small>WORKOUT IN PROGRESS</small></div>
+  </div>
+</section>
+<div class="detail-progress"><span id="detail-progress-bar"></span></div>
+<section class="saved-custom-exercises" id="saved-custom-exercises" hidden>
+  <button class="saved-custom-toggle" id="saved-custom-toggle" type="button" aria-expanded="false">
+    <span>✦</span><strong>MY EXERCISES</strong><small id="saved-custom-count">0</small>
+  </button>
+  <div class="saved-custom-panel" id="saved-custom-panel" hidden>
+    <div class="saved-custom-head"><span>SAVED CUSTOM EXERCISES</span><small>Tap + to add to today's workout</small></div>
+    <div class="saved-custom-list" id="saved-custom-list"></div>
+  </div>
+</section>
+<section class="all-exercises" id="all-exercises"></section>
+<section class="add-exercise-zone">
+  <button class="add-exercise-main" id="add-exercise-main" type="button"><span>＋</span><div><strong>Add exercise</strong><small>Choose from the library or create your own</small></div></button>
+</section>
+<div class="exercise-modal" id="exercise-modal" aria-hidden="true">
+  <div class="exercise-modal-backdrop" data-close-modal></div>
+  <div class="exercise-modal-panel">
+    <div class="modal-header"><div><p class="eyebrow">ADD TO THE AGENDA</p><h2>Add exercise</h2></div><button class="modal-close" data-close-modal type="button">×</button></div>
+    <div class="modal-tabs"><button class="modal-tab active" data-tab="library" type="button">Exercise library</button><button class="modal-tab" data-tab="custom" type="button">Create custom</button></div>
+    <div class="modal-view active" id="library-view">
+      <input class="exercise-search" id="exercise-search" type="search" placeholder="Search e.g. bench press, curl, squat...">
+      <div class="library-list" id="library-list"></div>
+    </div>
+    <div class="modal-view" id="custom-view">
+      <div class="custom-exercise-form">
+        <label>Exercise name<input id="custom-name" placeholder="E.g. cable lateral raise"></label>
+        <label>Kortnamn<input id="custom-fun" placeholder="E.g. Side Piece Supreme"></label>
+        <div class="custom-form-row"><label>Set<input id="custom-sets" type="number" min="1" max="10" value="3"></label><label>Reps<input id="custom-reps" placeholder="8–12"></label></div>
+        <button class="create-exercise-button" id="create-exercise-button" type="button">CREATE & ADD</button>
+      </div>
+    </div>
+  </div>
+</div>
+<section class="finish-screen" id="finish-screen">
+  <div class="finish-inner"><div class="finish-stars">✓</div><p class="eyebrow">PASS KLART</p>
+  <h2>Bra jobbat.</h2>
+  <p id="finish-copy">Trainingspasset är sparat.</p>
+  <a class="primary-button" href="index.html"><span>Done for today</span><span></span></a></div>
+</section>
+</main></div><script src="workout-detail.js?v=rc37"></script>
+<button class="measure-tab" id="measure-tab" type="button" aria-controls="measure-drawer" aria-expanded="false">
+  <span>MEASURE</span><strong>MEASURE</strong>
+</button>
+
+<div class="measure-drawer" id="measure-drawer" aria-hidden="true">
+  <div class="measure-backdrop" data-close-measures></div>
+  <aside class="measure-panel">
+    <div class="measure-header">
+      <div><p class="eyebrow">JOCKSTRAP FIT REPORT</p><h2>Measure the consequences.</h2><p>Log weight and body measurements here. Progress lives in the Diary.</p></div>
+      <button class="measure-close" type="button" data-close-measures>×</button>
+    </div>
+
+    <form id="measure-form" class="measure-form">
+      <div class="measure-primary">
+        <label>BODY WEIGHT <span>kg</span><input id="measure-weight" name="weight" type="number" inputmode="decimal" step="0.1" min="30" max="300" placeholder="70.0"></label>
+        <label>WAIST <span>cm</span><input id="measure-waist" name="waist" type="number" inputmode="decimal" step="0.1" min="40" max="250" placeholder="80.0"></label>
+      </div>
+
+      <details class="measure-more" open>
+        <summary>More body measurements <span>＋</span></summary>
+        <div class="measure-grid">
+          <label>CHEST <span>cm</span><input name="chest" type="number" inputmode="decimal" step="0.1" placeholder="95.0"></label>
+          <label>HIPS <span>cm</span><input name="hips" type="number" inputmode="decimal" step="0.1" placeholder="92.0"></label>
+          <label>LEFT BICEPS <span>cm</span><input name="bicepsLeft" type="number" inputmode="decimal" step="0.1" placeholder="34.0"></label>
+          <label>RIGHT BICEPS <span>cm</span><input name="bicepsRight" type="number" inputmode="decimal" step="0.1" placeholder="34.0"></label>
+          <label>LEFT THIGH <span>cm</span><input name="thighLeft" type="number" inputmode="decimal" step="0.1" placeholder="55.0"></label>
+          <label>RIGHT THIGH <span>cm</span><input name="thighRight" type="number" inputmode="decimal" step="0.1" placeholder="55.0"></label>
+          <label>LEFT CALF <span>cm</span><input name="calfLeft" type="number" inputmode="decimal" step="0.1" placeholder="37.0"></label>
+          <label>RIGHT CALF <span>cm</span><input name="calfRight" type="number" inputmode="decimal" step="0.1" placeholder="37.0"></label>
+          <label>NECK <span>cm</span><input name="neck" type="number" inputmode="decimal" step="0.1" placeholder="38.0"></label>
+        </div>
+      </details>
+
+      <label class="measure-note">NOTE <textarea name="note" rows="2" placeholder="E.g. morning weight, before breakfast..."></textarea></label>
+      <button class="measure-save" type="submit">SAVE TODAY'S MEASUREMENTS</button>
+      <p class="measure-feedback" id="measure-feedback"></p>
+    </form>
+
+    <section class="measure-recent">
+      <div class="measure-recent-head"><span>RECENT LOGS</span><a href="body-progress.html">View progress</a></div>
+      <div id="measure-recent-list"></div>
+    </section>
+  </aside>
+</div>
+
+<script src="body-measurements.js?v=safari-mobile-fix-1"></script>
+
+<div class="workout-complete-modal" id="workout-complete-modal" aria-hidden="true">
+  <div class="workout-complete-backdrop"></div>
+  <section class="workout-complete-card" role="dialog" aria-modal="true" aria-labelledby="workout-complete-title">
+    <p class="eyebrow" id="workout-complete-kicker">WORKOUT COMPLETE</p>
+    <h2 id="workout-complete-title">You survived.</h2>
+    <p class="workout-complete-copy" id="workout-complete-copy"></p>
+    <div class="workout-complete-stats" id="workout-complete-stats"></div>
+    <a class="workout-home-button" href="index.html">BACK TO HOME PAGE <span></span></a>
+  </section>
+</div>
+
+<script src="app-core.js?v=rc37"></script>
+</body></html>
