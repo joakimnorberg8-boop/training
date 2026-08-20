@@ -9,9 +9,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=rc37">
+  <link rel="stylesheet" href="styles.css?v=rc40">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="stylesheet" href="layout-rc37.css?v=1">
+<link rel="stylesheet" href="layout-rc37.css?v=2">
 </head>
 <body class="home-menu-page">
   <div class="app-shell">
@@ -89,7 +89,7 @@
     <div class="mobile-quick-grid">
       <a class="quick-neon quick-diary" href="daily.html"><span class="quick-line-icon" aria-hidden="true"></span><strong>Diary</strong><small>SE DIN VECKA</small></a>
       <a class="quick-neon quick-progress" href="history.html"><span></span><strong>Progress</strong><small>FÖLJ UTVECKLINGEN</small></a>
-      <button class="quick-neon quick-measure" type="button" data-open-measures><span>＋</span><strong>Mätning</strong><small>VIKT & MÅTT</small></button>
+      <button class="quick-neon quick-measure" type="button" data-open-measures><span>＋</span><strong>Measurements</strong><small>WEIGHT & BODY</small></button>
       
     </div>
   </section>
@@ -139,7 +139,7 @@
         </div>
       </details>
 
-      <label class="measure-note">NOTE <textarea name="note" rows="2" placeholder="T.ex. morgonvikt, innan frukost..."></textarea></label>
+      <label class="measure-note">NOTE <textarea name="note" rows="2" placeholder="E.g. morning weight, before breakfast..."></textarea></label>
       <button class="measure-save" type="submit">SAVE TODAY'S MEASUREMENTS</button>
       <p class="measure-feedback" id="measure-feedback"></p>
     </form>
@@ -151,18 +151,9 @@
   </aside>
 </div>
 
-<script src="body-measurements.js?v=home-menu-1"></script>
+<script src="body-measurements.js?v=rc40"></script>
 
-<script>
-  document.querySelectorAll('[data-open-measures]').forEach(button => button.addEventListener('click', () => {
-    const drawer = document.getElementById('measure-drawer');
-    if (!drawer) return;
-    drawer.classList.add('open');
-    drawer.setAttribute('aria-hidden', 'false');
-    document.body.classList.add('measure-open');
-  }));
-</script>
 
-<script src="app-core.js?v=rc37"></script>
+<script src="app-core.js?v=rc40"></script>
 </body>
 </html>

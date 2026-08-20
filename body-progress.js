@@ -1,5 +1,5 @@
 let rows=[];
-function loadRows(){rows=JSON.parse(localStorage.getItem('gaym-body-measurements')||'[]').sort((a,b)=>new Date(a.date)-new Date(b.date));}
+function loadRows(){try{const value=JSON.parse(localStorage.getItem('gaym-body-measurements')||'[]');rows=(Array.isArray(value)?value:[]).filter(x=>x&&x.date).sort((a,b)=>new Date(a.date)-new Date(b.date));}catch{rows=[];}}
 loadRows();
 const $=id=>document.getElementById(id);
 let show=false;

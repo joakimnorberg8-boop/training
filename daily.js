@@ -153,3 +153,14 @@ document.querySelectorAll('[data-history-close]').forEach(x=>x.onclick=closeEdit
 $('history-save') && ($('history-save').onclick=saveEdit);
 $('history-delete') && ($('history-delete').onclick=deleteEdit);
 renderTimeline();
+
+window.addEventListener('gaym:measurements-saved',()=>{
+  try{const next=JSON.parse(localStorage.getItem('gaym-body-measurements')||'[]');measurements=Array.isArray(next)?next:[];}catch{measurements=[];}
+  renderTimeline();
+});
+window.addEventListener('gaym:data-changed',event=>{
+  if(event.detail?.type==='gaym-body-measurements'){
+    try{const next=JSON.parse(localStorage.getItem('gaym-body-measurements')||'[]');measurements=Array.isArray(next)?next:[];}catch{measurements=[];}
+    renderTimeline();
+  }
+});

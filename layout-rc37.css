@@ -157,3 +157,18 @@ img,svg,video,canvas{max-width:100%}
   .weight-stepper{grid-template-columns:28px minmax(0,1fr) 28px!important;gap:3px!important}
   .weight-stepper button{width:28px!important;height:42px!important}
 }
+
+/* RC40 measurements: drawer must stay usable above the keyboard/nav and never clip the save action. */
+.measure-feedback[data-state="error"]{color:#ff6d9f!important}
+.measure-feedback[data-state="ok"]{color:#d8ff44!important}
+@media(max-width:760px){
+  body.measure-open .mobile-bottom-nav{visibility:hidden!important;opacity:0!important;pointer-events:none!important}
+  .measure-drawer.open{display:block!important;position:fixed!important;inset:0!important;z-index:20000!important}
+  .measure-backdrop{position:absolute!important;inset:0!important;background:rgba(0,0,0,.76)!important}
+  .measure-panel{position:absolute!important;left:0!important;right:0!important;bottom:0!important;top:auto!important;width:100%!important;max-width:none!important;max-height:min(88dvh,760px)!important;overflow-y:auto!important;border-radius:24px 24px 0 0!important;padding:18px 16px calc(22px + env(safe-area-inset-bottom))!important;overscroll-behavior:contain!important}
+  .measure-header{position:sticky!important;top:-18px!important;z-index:4!important;background:#121219!important;padding:18px 0 10px!important;margin-top:-18px!important}
+  .measure-close{position:absolute!important;right:0!important;top:18px!important;width:42px!important;height:42px!important;display:grid!important;place-items:center!important}
+  .measure-form{padding-bottom:8px!important}
+  .measure-save{position:sticky!important;bottom:0!important;z-index:3!important;width:100%!important;min-height:54px!important;border-radius:12px!important;margin-top:10px!important;box-shadow:0 -12px 25px #121219!important}
+  .measure-feedback{min-height:22px!important;text-align:center!important;padding:6px 0!important}
+}

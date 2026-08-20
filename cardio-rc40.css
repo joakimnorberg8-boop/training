@@ -1,0 +1,60 @@
+/* RC40: cardio timer matching the first approved mockup. */
+.cardio-timer-page{background:#08090e;color:#f7f3ed}
+.cardio-timer-shell{max-width:760px;margin:0 auto;padding:0 18px}
+.cardio-native-top{height:62px;display:grid;grid-template-columns:44px 1fr 44px;align-items:center;position:relative;border-bottom:0;background:#08090e}
+.cardio-native-top>strong{text-align:center;font-size:.9rem;letter-spacing:-.02em}
+.cardio-top-icon{width:42px;height:42px;border:0;background:transparent;color:#f7f3ed;display:grid;place-items:center;padding:0;text-decoration:none;border-radius:50%}
+.cardio-top-icon:active{background:rgba(255,255,255,.06)}
+.cardio-top-icon svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.cardio-top-icon button svg circle,.cardio-top-icon svg circle{fill:currentColor;stroke:none}
+.cardio-overflow-menu{position:absolute;right:0;top:54px;z-index:30;width:210px;padding:8px;border:1px solid rgba(255,255,255,.1);border-radius:14px;background:#15151b;box-shadow:0 20px 50px rgba(0,0,0,.5)}
+.cardio-overflow-menu button,.cardio-overflow-menu a{width:100%;min-height:42px;padding:0 10px;border:0;background:transparent;color:#f7f3ed;text-decoration:none;font:600 .68rem var(--font-display);display:flex;align-items:center;text-align:left;border-radius:9px}
+.cardio-overflow-menu button:hover,.cardio-overflow-menu a:hover{background:rgba(255,255,255,.05)}
+.cardio-session-main.cardio-first-style{padding:8px 0 110px!important}
+.cardio-ring-player{width:100%;max-width:470px;margin:0 auto;padding:0!important;display:flex!important;flex-direction:column;align-items:center;text-align:center;min-height:0!important}
+.cardio-session-label{margin:5px 0 7px;font:500 .58rem var(--font-mono);letter-spacing:.08em;color:#ff3d8d}
+.cardio-activity-title{display:flex;align-items:center;justify-content:center;gap:9px}
+.cardio-activity-title h1{margin:0!important;font-size:1.3rem!important;line-height:1!important;letter-spacing:-.035em!important}
+.cardio-activity-icon{width:26px;height:26px;color:#ff3d8d;display:grid;place-items:center}
+.cardio-activity-icon svg,.ring-activity-icon svg{width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.cardio-activity-icon svg circle,.ring-activity-icon svg circle{fill:none}
+.cardio-ring-player .real-name{margin:5px 0 11px!important;color:#8e8993!important;font-size:.72rem!important}
+.cardio-session-pills{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:17px}
+.cardio-session-pills span{border:1px solid rgba(255,255,255,.11);background:rgba(255,255,255,.025);border-radius:999px;padding:5px 10px;font:500 .48rem var(--font-mono);color:#ddd8df}
+.cardio-session-pills b{font-weight:500;color:inherit}
+.timer-ring{--ring-progress:360deg;width:min(72vw,300px);aspect-ratio:1;position:relative;display:grid;place-items:center;border-radius:50%;margin:0 auto 13px;background:conic-gradient(from -90deg,#ff2e7e 0 var(--ring-progress),#26262d var(--ring-progress) 360deg);box-shadow:0 0 0 1px rgba(255,255,255,.035),0 0 30px rgba(255,46,126,.045)}
+.timer-ring:before{content:"";position:absolute;inset:10px;border-radius:50%;background:#08090e;box-shadow:inset 0 0 0 1px rgba(255,255,255,.055)}
+.timer-ring-track{position:absolute;inset:19px;border-radius:50%;border:1px solid rgba(255,255,255,.05)}
+.timer-ring-inner{position:relative;z-index:2;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.ring-activity-icon{width:31px;height:31px;color:#ff3d8d;margin-bottom:8px;display:grid;place-items:center}
+.mega-timer{font-size:clamp(3.25rem,15vw,4.85rem)!important;line-height:.9!important;letter-spacing:-.06em!important;color:#fff!important;font-weight:800!important}
+.interval-type-label{margin-top:10px;font:500 .58rem var(--font-mono);letter-spacing:.06em;color:#ff3d8d}
+.round-counter{margin-top:9px;font:500 .67rem var(--font-mono);color:#fff}
+.round-counter strong{font-weight:500}
+.cardio-next-block{min-height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;margin-bottom:10px}
+.cardio-next-block span{font:500 .43rem var(--font-mono);color:#77727b;letter-spacing:.08em}
+.cardio-next-block strong{font-size:.82rem;margin-top:2px;color:#fff}
+.cardio-next-block small{font:400 .55rem var(--font-mono);color:#aaa4ad;margin-top:1px}
+.cardio-control-row{width:min(100%,350px);display:grid;grid-template-columns:64px 1fr 64px;align-items:center;gap:14px;margin-bottom:16px}
+.cardio-control-row button{height:56px;border-radius:50%;border:1px solid #ff2e7e;background:#0e0f14;color:#ff4b95;font:700 .63rem var(--font-display)}
+.cardio-control-row .cardio-main-control{width:72px;height:72px;justify-self:center;background:#ff2e7e;color:#fff;border-color:#ff2e7e;font-size:.6rem;box-shadow:0 10px 28px rgba(255,46,126,.22)}
+.cardio-end-button{width:min(100%,350px);min-height:48px;border-radius:10px;border:1px solid rgba(255,46,126,.38);background:linear-gradient(180deg,rgba(255,46,126,.11),rgba(255,46,126,.04));color:#ff4b95;font:700 .57rem var(--font-mono);letter-spacing:.05em}
+.cardio-rest-phase .interval-type-label,.cardio-rest-phase .ring-activity-icon{color:#ff3d8d}
+.cardio-rest-phase .timer-ring{background:conic-gradient(from -90deg,#ff2e7e 0 var(--ring-progress),#26262d var(--ring-progress) 360deg)}
+.cardio-timer-page .mobile-bottom-nav{z-index:5000!important}
+.cardio-timer-page .workout-complete-modal{z-index:10020}
+@media(max-width:760px){
+ .cardio-timer-shell{padding:0 18px}
+ .cardio-session-main.cardio-first-style{padding-bottom:calc(96px + env(safe-area-inset-bottom))!important}
+ .timer-ring{width:min(72vw,292px)}
+ .cardio-native-top{height:58px}
+ .cardio-overflow-menu{right:2px;top:50px}
+}
+@media(max-width:390px){
+ .cardio-timer-shell{padding:0 14px}
+ .timer-ring{width:min(74vw,270px)}
+ .mega-timer{font-size:4rem!important}
+ .cardio-control-row{grid-template-columns:58px 1fr 58px;gap:12px}
+ .cardio-control-row button{height:54px}
+ .cardio-control-row .cardio-main-control{width:68px;height:68px}
+}
