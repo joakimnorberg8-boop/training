@@ -1,9 +1,0 @@
-{
-  "name": "GAYM Training",
-  "short_name": "GAYM",
-  "start_url": "./",
-  "display": "standalone",
-  "background_color": "#090b0f",
-  "theme_color": "#090b0f",
-  "description": "Mobile-first strength, cardio and rehab training tracker with adaptive nutrition targets."
-}
