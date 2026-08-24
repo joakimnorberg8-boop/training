@@ -51,3 +51,21 @@ For a public/commercial release, verify redistribution/licensing rights for each
 
 ## Kai training plan
 The built-in Kai program in v16 is transcribed from the training-plan screenshot supplied by the user in the conversation. It uses the app's existing strength-session engine rather than a separate workout implementation.
+
+
+## v17 app behavior
+- Added manual backdated workout history entries and per-session deletion.
+- Cardio active sessions count down from target duration; optional distance is captured when finishing.
+
+
+## v18 calendar logging
+- Forgotten workouts are now logged from My Plan by tapping today or any earlier calendar date.
+- Future dates only allow planning; today/past dates expose a direct log-workout action.
+- The previous History entry-point for logging past workouts was removed to keep one clear flow.
+
+
+## Bottom-friendly classification (v20)
+- The app no longer treats Bottom-friendly as a cuisine or user-entered tag. It is computed from nutrition data.
+- Classification requires at least 10 g fiber per serving and at least 14 g fiber per 1,000 kcal. The 14 g/1,000 kcal benchmark follows U.S. dietary-fiber guidance; the 10 g serving minimum is an app threshold so the badge only appears on meaningfully fiber-rich meals.
+- Evidence base used for the concept: AHRQ/NCBI 2025 systematic review on fiber and laxation; NIDDK fiber guidance; San Francisco AIDS Foundation bottoming resources noting that adequate fiber can support regularity but high-fiber foods can also accelerate bowel motility and individual timing/tolerance matters.
+- This badge is for everyday bowel-regularity support, not a guarantee of same-day anal-sex preparation.
