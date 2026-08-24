@@ -69,3 +69,11 @@ The built-in Kai program in v16 is transcribed from the training-plan screenshot
 - Classification requires at least 10 g fiber per serving and at least 14 g fiber per 1,000 kcal. The 14 g/1,000 kcal benchmark follows U.S. dietary-fiber guidance; the 10 g serving minimum is an app threshold so the badge only appears on meaningfully fiber-rich meals.
 - Evidence base used for the concept: AHRQ/NCBI 2025 systematic review on fiber and laxation; NIDDK fiber guidance; San Francisco AIDS Foundation bottoming resources noting that adequate fiber can support regularity but high-fiber foods can also accelerate bowel motility and individual timing/tolerance matters.
 - This badge is for everyday bowel-regularity support, not a guarantee of same-day anal-sex preparation.
+
+
+## v24 custom programs
+Custom Programs use the same GAYM program/session engine as Kai and Raymond. No external data source is required for this feature.
+
+
+## v25 Jocke program
+The Jocke PPL + Upper + Lower/Arms plan was supplied by the user. It uses the existing shared GAYM ready-program engine.
