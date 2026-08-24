@@ -77,3 +77,15 @@ Custom Programs use the same GAYM program/session engine as Kai and Raymond. No 
 
 ## v25 Jocke program
 The Jocke PPL + Upper + Lower/Arms plan was supplied by the user. It uses the existing shared GAYM ready-program engine.
+
+
+## v26 reactive unicorn states
+Unicorn status artwork is derived from the GAYM mascot concept generated in this conversation and stored locally as animated WebP assets.
+The state engine uses logged workout dates, completed exercise sets, reconstructed chronological PR history, daily calorie/protein progress, training streak, planned rest entries and local time-of-day.
+PR history is recalculated after live sessions, retroactive session logging, and session deletion so backdated workouts can change later PR classification correctly.
+
+## v37
+- Active workout time is derived from persisted start timestamps, so it resumes correctly after the app/browser is closed.
+- Strength workout elapsed minutes refresh live.
+- Cardio countdown also derives from persisted timestamps and continues while closed unless explicitly paused.
+- Active-session state is saved on pagehide/visibility changes.

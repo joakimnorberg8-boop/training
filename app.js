@@ -7,13 +7,13 @@ const defaults={
  customWorkouts:[],customPrograms:[],sessions:[],measurements:[],nutrition:[],recipeFavorites:[],customRecipes:[],
  planned:[], activeSession:null, profileCreated:false, sassSeed:null, dailySass:{date:null,text:''},
  notificationSettings:{workout:true,nutrition:true,progress:true,dailySass:true,unhinged:true,dailyTime:'09:00',nutritionTime:'19:00'},
- notifications:[], notificationMeta:{dailySassDate:null,nutritionDate:null,absenceDate:null}
+ notifications:[], notificationMeta:{dailySassDate:null,nutritionDate:null,absenceDate:null,streakMilestone:null}, unicornEvent:null
 };
 
 const sass={
  welcome:["Hot people train. Everyone else writes 'hey' on Grindr.","Go become a workplace distraction.","Another day, another chance to become offensively hot.","Your body called. It wants heavier weights and worse decisions.","Clocked in, caffeinated, and dangerously close to a pump.","The homosexual agenda for today: lift something heavy.","You're back. Vanity remains a powerful renewable energy source.","Train hard. Be unbearable about it later."],
  active:["You already started. Finish what you began, slut.","Workout in progress. Stop flirting with the home screen.","The weights are waiting. Unlike your situationship, they are consistent."],
- gain:["You said BUILD MUSCLE. Eat the fucking food.","Bulk responsibly. We want muscle, not a hostage situation with your jeans.","Protein first. The tits have a construction schedule.","More muscle, more problems. Proceed."],
+ gain:["Hey gorgeous. Let’s make today iconic.","Welcome back, babe. Stronger, hotter, happier. Pick three.","Hello, gorgeous. Your muscles have appointments.","Back again? Very gay. Very disciplined."],
  lose:["Keep the muscle. Lose the fluff. Keep the attitude.","Cutting season. Hunger is not a personality, so eat properly.","Deficit, not disappearance. We are keeping the ass."],
  maintain:["Maintenance mode: annoyingly stable and still hot.","Hold the line. Apparently perfection has admin work."],
  strength:["Workout done. You may now return to being insufferably hot.","Another lifting session complete. The homosexual agenda advances.","Fed, trained, dangerous. Go admire the pump.","Weights moved. Ego nourished. Excellent work."],
@@ -74,12 +74,23 @@ function homeSass(){
  return text;
 }
 function completionSass(session,durationMin,doneSets,totalSets){const previousCount=data.sessions.length;const completion=totalSets?doneSets/totalSets:1;const nextStreak=calcStreakWithDate(session.date);if(previousCount===0)return pickSass('first');if(nextStreak>=7)return pickSass('streak');if(session.type!=='cardio'&&totalSets&&completion<0.5)return pickSass('partial');if(durationMin<20)return pickSass('quick');if(durationMin>=75)return pickSass('long');if(session.type==='cardio')return pickSass('cardio');if(session.type==='rehab')return pickSass('rehab');return pickSass('strength')}
-function calcStreakWithDate(extraDate){const set=new Set(data.sessions.map(s=>s.date));if(extraDate)set.add(extraDate);let d=new Date(),n=0;for(let i=0;i<365;i++){const key=isoToday(d);if(set.has(key))n++;else if(i>0)break;d.setDate(d.getDate()-1)}return n}
+function streakDateSet(extraDate){
+ const set=new Set((data.sessions||[]).filter(s=>s.completed!==false).map(s=>s.date));
+ (data.planned||[]).forEach(p=>{if(p&&(p.type==='rest'||/rest|recovery/i.test(p.name||'')))set.add(p.date)});
+ if(extraDate)set.add(extraDate);
+ return set;
+}
+function calcStreakFromDates(extraDate){
+ const set=streakDateSet(extraDate);let d=new Date(),n=0;
+ for(let i=0;i<365;i++){const key=isoToday(d);if(set.has(key))n++;else if(i>0)break;d.setDate(d.getDate()-1)}
+ return n;
+}
+function calcStreakWithDate(extraDate){return calcStreakFromDates(extraDate)}
 
 function uid(){return (globalThis.crypto&&typeof crypto.randomUUID==='function')?crypto.randomUUID():`gaym-${Date.now()}-${Math.random().toString(16).slice(2)}`}
 function isoToday(d=new Date()){const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${day}`}
 function load(){try{return Object.assign({},defaults,JSON.parse(localStorage.getItem('gaymV2')||'{}'))}catch{return structuredClone(defaults)}}
-let data=load(), route='home', routeArgs={}, entryUnlocked=false;data.planned=(data.planned||[]).filter(x=>x&&x.workoutId);data.dailySass=data.dailySass&&typeof data.dailySass==='object'?data.dailySass:{date:null,text:''};data.customRecipes=Array.isArray(data.customRecipes)?data.customRecipes:[];data.recipeFavorites=Array.isArray(data.recipeFavorites)?data.recipeFavorites:[];
+let data=load(), route='home', routeArgs={}, entryUnlocked=false;if(data.activeSession){const now=Date.now();if(!Number.isFinite(Number(data.activeSession.startedAt))||Number(data.activeSession.startedAt)<=0)data.activeSession.startedAt=now;data.activeSession.startedAt=Number(data.activeSession.startedAt);data.activeSession.totalPause=Math.max(0,Number(data.activeSession.totalPause)||0);if(data.activeSession.pausedAt!=null)data.activeSession.pausedAt=Number(data.activeSession.pausedAt)||null;}if(/You said BUILD MUSCLE|Eat the fucking food/i.test(data.dailySass?.text||''))data.dailySass={date:null,text:''};data.planned=(data.planned||[]).filter(x=>x&&(x.type==='rest'||x.workoutId));data.dailySass=data.dailySass&&typeof data.dailySass==='object'?data.dailySass:{date:null,text:''};data.customRecipes=Array.isArray(data.customRecipes)?data.customRecipes:[];data.recipeFavorites=Array.isArray(data.recipeFavorites)?data.recipeFavorites:[];data.notifications=Array.isArray(data.notifications)?data.notifications:[];data.notificationMeta=Object.assign({dailySassDate:null,nutritionDate:null,absenceDate:null,streakMilestone:null},data.notificationMeta||{});recomputePRHistory({notifyNew:false});
 function activityFactor(sex,level){const table={sedentary:1.20,low:1.375,active:1.55,very:1.725};return table[level]||1.55}
 function goalLabel(goal){return goal==='lose'?'Lose weight':goal==='maintain'?'Maintain weight':'Build muscle'}
 function calcTargets(profile){const weight=Math.max(35,+profile.weight||70),height=Math.max(130,+profile.height||175),age=Math.max(18,+profile.age||30),sex=profile.sex==='female'?'female':'male';const rmr=10*weight+6.25*height-5*age+(sex==='male'?5:-161);const maintenance=Math.round(rmr*activityFactor(sex,profile.activity));const goal=profile.goal||'maintain';let calories=maintenance;if(goal==='lose')calories=maintenance-Math.max(300,Math.min(500,Math.round(maintenance*0.15)));if(goal==='gain')calories=maintenance+Math.max(250,Math.min(400,Math.round(maintenance*0.12)));calories=Math.round(calories/10)*10;const proteinPerKg=goal==='gain'?2.0:goal==='lose'?2.0:1.8;const protein=Math.round(weight*proteinPerKg);const fatPerKg=goal==='gain'?1.0:goal==='lose'?0.8:0.9;const fat=Math.max(45,Math.round(weight*fatPerKg));const carbs=Math.max(0,Math.round((calories-protein*4-fat*9)/4));return {rmr:Math.round(rmr),maintenance,calories,protein,fat,carbs,proteinPerKg,surplus:goal==='gain'?calories-maintenance:0,deficit:goal==='lose'?maintenance-calories:0}}
@@ -139,65 +150,214 @@ function evaluateNotifications(){
  }
  const foods=data.nutrition.filter(n=>n.date===today),kcal=foods.reduce((a,n)=>a+(+n.kcal||0),0),protein=foods.reduce((a,n)=>a+(+n.protein||0),0);
  if(s.nutrition&&notificationTimeReached(s.nutritionTime)&&data.notificationMeta.nutritionDate!==today&&(kcal<data.profile.calorieTarget*.78||protein<data.profile.proteinTarget*.78)){
-  const proteinLeft=Math.max(0,Math.round(data.profile.proteinTarget-protein)),calLeft=Math.max(0,Math.round(data.profile.calorieTarget-kcal));
-  queueNotification({kind:'nutrition',title:'Nutrition check',body:notificationText(`${proteinLeft} g protein and ${calLeft} kcal left today.`,`Babe, ${proteinLeft} g protein and ${calLeft} kcal are still wandering around unsupervised. Go eat.`),route:'nutrition',dedupeKey:`nutrition-${today}`});data.notificationMeta.nutritionDate=today;
+  const proteinLeft=Math.max(0,Math.round(data.profile.proteinTarget-protein)),calLeft=Math.max(0,Math.round(data.profile.calorieTarget-kcal)),kr=data.profile.calorieTarget?kcal/data.profile.calorieTarget:0,pr=data.profile.proteinTarget?protein/data.profile.proteinTarget:0;
+  const savage=kr<.70&&pr<.70?`You call this eating? ${proteinLeft} g protein and ${calLeft} kcal left. Go fix it.`:kr<.70?`Where are your calories? ${calLeft} kcal left. This is neglect with a macro tracker.`:`That protein number is laughable. ${proteinLeft} g left. Fix it.`;
+  queueNotification({kind:'nutrition',title:'Nutrition check',body:notificationText(`${proteinLeft} g protein and ${calLeft} kcal left today.`,savage),route:'nutrition',dedupeKey:`nutrition-${today}`});data.notificationMeta.nutritionDate=today;
  }
  const gap=daysSinceLastSession();
  if(s.workout&&gap!==null&&gap>=4&&data.notificationMeta.absenceDate!==today){
-  queueNotification({kind:'workout',title:'The gym remembers you',body:notificationText(`${gap} days since your last workout.`,`${gap} days without training. The dumbbells have filed a missing person report.`),route:'plan',dedupeKey:`absence-${today}`});data.notificationMeta.absenceDate=today;
+  queueNotification({kind:'workout',title:'The gym remembers you',body:notificationText(`${gap} days since your last workout.`,`${gap} days without training. The dumbbells have more dedication than you.`),route:'plan',dedupeKey:`absence-${today}`});data.notificationMeta.absenceDate=today;
+ }
+ const streak=calcStreak(),milestone=[30,15,10,7,5,3].find(x=>streak>=x);
+ if(s.progress&&milestone&&data.notificationMeta.streakMilestone!==milestone){
+  queueNotification({kind:'streak',title:`${milestone} day streak`,body:notificationText(`You reached a ${milestone}-day training streak.`,`Discipline looks good on you. Don’t ruin it now.`),route:'progress',dedupeKey:`streak-${milestone}`});data.notificationMeta.streakMilestone=milestone;
  }
  save();
 }
-function detectExercisePRs(session){
- if(!session||session.type==='cardio')return[];
- const settings=notificationSettings();if(!settings.progress)return[];
- const previous=data.sessions.filter(s=>s.id!==session.id&&s.type!=='cardio');
- const prs=[];
- (session.items||[]).forEach(item=>{
-  let previousBest=0;
-  previous.forEach(s=>(s.items||[]).filter(x=>x.name===item.name).forEach(x=>(x.sets||[]).filter(z=>z.done&&+z.weight>0&&+z.reps>0).forEach(z=>{previousBest=Math.max(previousBest,estimate1RM(+z.weight,+z.reps))})));
-  const current=(item.sets||[]).filter(z=>z.done&&+z.weight>0&&+z.reps>0).reduce((best,z)=>Math.max(best,estimate1RM(+z.weight,+z.reps)),0);
-  if(previousBest>0&&current>previousBest+0.05)prs.push({name:item.name,score:current,previous:previousBest});
- });
- return prs;
-}
-function queuePRNotifications(session,prs){
- prs.forEach(pr=>queueNotification({kind:'pr',title:`New ${pr.name} PR`,body:notificationText(`Estimated strength improved to ${pr.score.toFixed(1)} kg.`,`NEW ${pr.name.toUpperCase()} PR. The homosexual agenda advances. 🏆`),route:'progress-exercise',args:{name:pr.name},dedupeKey:`pr-${session.id}-${pr.name}`}));
-}
-function unicornMood(){
- if(data.activeSession)return {mood:'active',label:'PUMP MODE'};
- const today=isoToday(),todaySession=data.sessions.some(s=>s.date===today),streak=calcStreak(),gap=daysSinceLastSession();
- if(streak>=7)return {mood:'proud',label:'ICON BEHAVIOR'};
- if(todaySession)return {mood:'happy',label:'FED & TRAINED'};
- if(gap!==null&&gap>=5)return {mood:'judgy',label:'JUDGING YOU'};
- return {mood:'idle',label:'GLITTER READY'};
-}
 
+function sessionSortValue(s){
+ const date=String(s.date||'1970-01-01'),time=Number(s.finishedAt||s.startedAt||0);
+ return `${date}|${String(time).padStart(16,'0')}`
+}
+function sessionExerciseBest(item){
+ return (item.sets||[]).filter(z=>z.done!==false&&Number(z.weight)>0&&Number(z.reps)>0).reduce((best,z)=>{
+  const score=estimated1RM(Number(z.weight),Number(z.reps));
+  return !best||score>best.score?{name:item.name,weight:Number(z.weight),reps:Number(z.reps),score}:best
+ },null)
+}
+function recomputePRHistory({notifyNew=false}={}){
+ const before=new Set();
+ (data.sessions||[]).forEach(s=>(s.prs||[]).forEach(pr=>before.add(`${s.id}|${String(pr.name).toLowerCase()}`)));
+ const bestByExercise=new Map(),ordered=(data.sessions||[]).filter(s=>s.completed!==false&&s.type!=='cardio').slice().sort((a,b)=>sessionSortValue(a).localeCompare(sessionSortValue(b)));
+ ordered.forEach(session=>{
+  const prs=[];
+  (session.items||[]).forEach(item=>{
+   const current=sessionExerciseBest(item);if(!current)return;
+   const key=String(item.name||'').trim().toLowerCase(),previous=bestByExercise.get(key);
+   if(previous&&current.score>previous.score+0.05)prs.push({...current,previous:previous.score});
+   if(!previous||current.score>previous.score)bestByExercise.set(key,current);
+  });
+  session.prs=prs;
+ });
+ const validPrKeys=new Set();
+ ordered.forEach(session=>(session.prs||[]).forEach(pr=>validPrKeys.add(`pr-${session.id}-${pr.name}`)));
+ data.notifications=(data.notifications||[]).filter(n=>n.kind!=='pr'||validPrKeys.has(n.dedupeKey));
+ if(data.unicornEvent?.type==='pr'){
+  const ev=data.sessions.find(s=>s.id===data.unicornEvent.sessionId);
+  if(!ev||(ev.prs||[]).every(pr=>pr.name!==data.unicornEvent.exercise))data.unicornEvent=null;
+ }
+ if(notifyNew&&notificationSettings().progress){
+  ordered.forEach(session=>(session.prs||[]).forEach(pr=>{
+   const key=`${session.id}|${String(pr.name).toLowerCase()}`;
+   if(before.has(key))return;
+   queueNotification({kind:'pr',title:`New ${pr.name} PR`,body:notificationText(`${pr.weight} kg × ${pr.reps}. New personal best detected.`,`NEW ${pr.name.toUpperCase()} PB. Screenshot it. Send it. Humiliate your old self. 🏆`),route:'progress-exercise',args:{name:pr.name},dedupeKey:`pr-${session.id}-${pr.name}`});
+   data.unicornEvent={type:'pr',discoveredDate:isoToday(),sessionId:session.id,sessionDate:session.date,exercise:pr.name,weight:pr.weight,reps:pr.reps};
+  }))
+ }
+ save();
+}
+function todaysNutritionStatus(){
+ const foods=(data.nutrition||[]).filter(n=>n.date===isoToday()),kcal=foods.reduce((a,n)=>a+(+n.kcal||0),0),protein=foods.reduce((a,n)=>a+(+n.protein||0),0);
+ return {kcal,protein,kcalRatio:data.profile.calorieTarget?kcal/data.profile.calorieTarget:0,proteinRatio:data.profile.proteinTarget?protein/data.profile.proteinTarget:0}
+}
+const UNICORN_STATES={
+ default:{key:'default',label:'GLITTER READY',image:'assets/unicorns_v34/unicorn_default.webp'},
+ newWorkout:{key:'new-workout',label:'READY TO TRAIN',image:'assets/unicorns_v34/unicorn_new_workout.webp'},
+ pump:{key:'pump',label:'PUMP MODE',image:'assets/unicorns_v34/unicorn_pump.webp'},
+ fed:{key:'fed',label:'FED & TRAINED',image:'assets/unicorns_v34/unicorn_fed.webp'},
+ pr:{key:'pr',label:'NEW PB / PR',image:'assets/unicorns_v34/unicorn_pr.webp'},
+ judging:{key:'judging',label:'JUDGING YOU',image:'assets/unicorns_v34/unicorn_judging.webp'},
+ hungry:{key:'hungry',label:'LOW NUTRITION',image:'assets/unicorns_v34/unicorn_low_nutrition.webp'},
+ calories:{key:'calories',label:'CALORIE DISASTER',image:'assets/unicorns_v34/unicorn_low_nutrition.webp'},
+ protein:{key:'protein',label:'PROTEIN DISASTER',image:'assets/unicorns_v34/unicorn_low_nutrition.webp'},
+ streak:{key:'streak',label:'STREAK MODE',image:'assets/unicorns_v34/unicorn_streak.webp'},
+ rest:{key:'rest',label:'REST DAY',image:'assets/unicorns_v34/unicorn_rest.webp'},
+ morning:{key:'morning',label:'MORNING MODE',image:'assets/unicorns_v34/unicorn_morning.webp'},
+ afternoon:{key:'afternoon',label:'AFTERNOON MODE',image:'assets/unicorns_v34/unicorn_afternoon.webp'},
+ evening:{key:'evening',label:'EVENING MODE',image:'assets/unicorns_v34/unicorn_evening.webp'},
+ late:{key:'late',label:'LATE NIGHT SASS',image:'assets/unicorns_v34/unicorn_late.webp'}
+};
+function unicornWithSass(base,sass){return {...base,sass}}
+function unicornState(){
+ const today=isoToday();
+ const hour=new Date().getHours();
+ const nut=todaysNutritionStatus();
+ const streak=calcStreak();
+ const gap=daysSinceLastSession();
+ const todaysPlan=(data.planned||[]).find(p=>p.date===today)||null;
+ const plannedRest=!!todaysPlan&&(todaysPlan.type==='rest'||/rest|recovery/i.test(todaysPlan.name||''));
+ const plannedWorkout=!!todaysPlan&&!plannedRest;
+ const trainedToday=(data.sessions||[]).some(s=>s.date===today&&s.completed!==false);
+
+ if(data.activeSession){
+  return unicornWithSass(UNICORN_STATES.pump,'Good. You showed up. Don’t get comfortable.');
+ }
+ if(data.unicornEvent?.type==='pr'&&data.unicornEvent.discoveredDate===today){
+  const exercise=data.unicornEvent.exercise?` ${data.unicornEvent.exercise}`:'';
+  const result=data.unicornEvent.weight?` ${data.unicornEvent.weight} kg${data.unicornEvent.reps?` × ${data.unicornEvent.reps}`:''}.`:'';
+  return unicornWithSass(UNICORN_STATES.pr,`NEW PB${exercise}!${result} You absolute freak.`);
+ }
+ if(plannedRest){
+  return unicornWithSass(UNICORN_STATES.rest,'Rest is part of the plan. Recover today, cause problems tomorrow.');
+ }
+ if(gap!==null&&gap>=4){
+  return unicornWithSass(UNICORN_STATES.judging,`${gap} days without training. The dumbbells have filed a missing person report.`);
+ }
+
+ const nutritionCheck=notificationTimeReached(notificationSettings().nutritionTime||'19:00');
+ if(nutritionCheck){
+  const kcalLeft=Math.max(0,Math.round((data.profile.calorieTarget||0)-nut.kcal));
+  const proteinLeft=Math.max(0,Math.round((data.profile.proteinTarget||0)-nut.protein));
+  if(nut.kcalRatio<.70&&nut.proteinRatio<.70){
+   return unicornWithSass(UNICORN_STATES.hungry,`${kcalLeft} kcal and ${proteinLeft} g protein left. Go eat.`);
+  }
+  if(nut.kcalRatio<.70&&nut.proteinRatio>=.70){
+   return unicornWithSass(UNICORN_STATES.calories,`${kcalLeft} kcal left. Protein survived. Your calories did not.`);
+  }
+  if(nut.proteinRatio<.70&&nut.kcalRatio>=.70){
+   return unicornWithSass(UNICORN_STATES.protein,`${proteinLeft} g protein left. That number is looking tragic.`);
+  }
+ }
+
+ if(streak>=3){
+  return unicornWithSass(UNICORN_STATES.streak,`${streak} day streak. Discipline looks good on you.`);
+ }
+ if(trainedToday&&nut.kcalRatio>=.72&&nut.proteinRatio>=.72){
+  return unicornWithSass(UNICORN_STATES.fed,'Trained and fed. Annoyingly responsible.');
+ }
+ if(trainedToday){
+  return unicornWithSass(UNICORN_STATES.pump,'Workout done. Smashed it. Now go recover.');
+ }
+ if(plannedWorkout){
+  return unicornWithSass(UNICORN_STATES.newWorkout,`${todaysPlan.name||'Workout'} is waiting. You know what to do.`);
+ }
+ if(hour>=22||hour<5){
+  return unicornWithSass(UNICORN_STATES.late,'Still awake? Legends recover too. Go to bed.');
+ }
+ if(hour<12){
+  return unicornWithSass(UNICORN_STATES.morning,'Morning, babe. Discipline looks good on you.');
+ }
+ if(hour<18){
+  return unicornWithSass(UNICORN_STATES.afternoon,'Afternoon check. Plenty of day left to get it done.');
+ }
+ return unicornWithSass(UNICORN_STATES.evening,'Finish strong. Close the day like a beast.');
+}
+function unicornMood(){const u=unicornState();return {mood:u.key,label:u.label,image:u.image,sass:u.sass}}
+function renderHomeUnicorn(){
+ const u=unicornState();
+ return `<div class="hero-art ${u.key}" aria-hidden="true"><div class="hero-mascot-row"><div class="hero-mascot-ring"><img class="hero-mascot" src="${u.image}" alt=""><span class="mascot-sparkle mascot-sparkle-a">✦</span><span class="mascot-sparkle mascot-sparkle-b">✧</span></div><div class="unicorn-speech">${escapeHtml(u.sass)}</div></div><span class="mascot-state-label">${escapeHtml(u.label)}</span></div>`;
+}
 function weekDays(offset=0){let start=new Date();start.setHours(12,0,0,0);start.setDate(start.getDate()-((start.getDay()+6)%7)+(offset*7));return Array.from({length:7},(_,i)=>{let d=new Date(start);d.setDate(start.getDate()+i);return d})}
 let planWeekOffset=0;
 function thisWeekSessions(){const days=weekDays().map(isoToday);return data.sessions.filter(s=>days.includes(s.date))}
-function activeOrPlanned(){if(data.activeSession)return {name:data.activeSession.name,type:data.activeSession.type,active:true,items:data.activeSession.items||[],startedAt:data.activeSession.startedAt};return data.planned.find(x=>x.date===isoToday())||null}
-function home(){const today=activeOrPlanned();const week=thisWeekSessions();const min=week.reduce((a,s)=>a+(s.durationMin||0),0);const foods=data.nutrition.filter(n=>n.date===isoToday());const kcal=foods.reduce((a,n)=>a+(+n.kcal||0),0),prot=foods.reduce((a,n)=>a+(+n.protein||0),0);const latest=data.measurements.at(-1)?.weight??data.profile.weight;const first=data.measurements[0]?.weight??latest;const diff=(latest-first).toFixed(1);const days=weekDays();
- shell(`${header()}<section class="home-intro"><p class="eyebrow">${fmtDate(new Date())}</p><h1 class="greeting">${escapeHtml(homeSass())}</h1><p class="daily-sass-note">Today's GAYM energy · changes tomorrow</p></section><section class="section"><p class="eyebrow">Today's workout</p><article class="card hero-card"><div class="hero-art" aria-hidden="true"><img class="hero-mascot" src="assets/glitter_unicorn.webp" alt=""><span class="mascot-sparkle mascot-sparkle-a">✦</span><span class="mascot-sparkle mascot-sparkle-b">✧</span></div><div class="hero-content">${today?`<span class="eyebrow" style="color:var(--cyan)">${today.active?'Workout in progress':today.type||'Training'}</span><h2 class="hero-title">${escapeHtml(today.name)}</h2><div class="meta">${today.active?`${today.items?.length||0} exercises · started ${new Date(today.startedAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`:'Ready when you are.'}</div><div class="stats-row"><span class="stat-pill">${today.type||'strength'}</span>${today.active?'<span class="stat-pill">Autosaved</span>':''}</div><button class="primary" id="home-start">${today.active?'CONTINUE WORKOUT':'START WORKOUT'}</button>`:`<h2 class="hero-title">No plan. Still hot. Deeply suspicious.</h2><div class="meta">Pick your poison, princess. Strength, cardio or rehab.</div><div class="stats-row"><span class="stat-pill">Strength · Cardio · Rehab</span></div><button class="primary" id="home-start">CHOOSE WORKOUT</button>`}</div></article></section>
+function homeWorkoutState(){
+ if(data.activeSession){
+  return {name:data.activeSession.name,type:data.activeSession.type||'strength',active:true,items:data.activeSession.items||[],startedAt:data.activeSession.startedAt,workoutId:data.activeSession.workoutId||''};
+ }
+ const planned=(data.planned||[]).find(x=>x.date===isoToday())||null;
+ if(!planned)return null;
+ if(planned.type==='rest')return {...planned,planned:true};
+ if(!planned.workoutId)return null;
+ const workout=(data.customWorkouts||[]).find(w=>w.id===planned.workoutId);
+ return workout?{...planned,name:planned.name||workout.name,type:planned.type||workout.type||'strength',planned:true}:null;
+}
+function home(){const today=homeWorkoutState();const week=thisWeekSessions();const min=week.reduce((a,s)=>a+(s.durationMin||0),0);const foods=data.nutrition.filter(n=>n.date===isoToday());const kcal=foods.reduce((a,n)=>a+(+n.kcal||0),0),prot=foods.reduce((a,n)=>a+(+n.protein||0),0);const latest=data.measurements.at(-1)?.weight??data.profile.weight;const first=data.measurements[0]?.weight??latest;const diff=(latest-first).toFixed(1);const days=weekDays();
+ shell(`${header()}<section class="home-intro"><p class="eyebrow">${fmtDate(new Date())}</p><h1 class="greeting">${escapeHtml(homeSass())}</h1><p class="daily-sass-note">Today's GAYM energy · changes tomorrow</p></section><section class="section"><p class="eyebrow">Today's workout</p><article class="card hero-card">${renderHomeUnicorn()}<div class="hero-content">${today?`<span class="eyebrow" style="color:var(--cyan)">${today.active?'Workout in progress':today.type||'Training'}</span><h2 class="hero-title">${escapeHtml(today.name)}</h2><div class="meta">${today.active?`${today.items?.length||0} exercises · started ${new Date(today.startedAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`:'Ready when you are.'}</div><div class="stats-row"><span class="stat-pill">${today.type||'strength'}</span>${today.active?'<span class="stat-pill">Autosaved</span>':''}</div><button class="primary" id="home-start">${today.active?'CONTINUE WORKOUT':today.type==='rest'?'VIEW REST DAY':'START WORKOUT'}</button>`:`<span class="eyebrow" style="color:var(--cyan)">TODAY</span><h2 class="hero-title">No plans today</h2><div class="meta">Your calendar is clear. Train if you want to, gorgeous.</div><div class="stats-row"><span class="stat-pill">Choose your workout</span></div><button class="primary" id="home-start">START WORKOUT</button>`}</div></article></section>
  <section class="section"><div class="section-head"><h2>This week</h2><button class="text-btn" data-home-plan>VIEW PLAN</button></div><article class="card week-card"><div class="week-summary"><span>${week.length} workouts · ${Math.floor(min/60)}h ${min%60}m</span><span>${week.reduce((a,s)=>a+(s.durationMin||0),0)} min</span></div><div class="week-days">${days.map(d=>{const done=data.sessions.some(s=>s.date===isoToday(d));return `<div class="day ${done?'done':''} ${isoToday(d)===isoToday()?'today':''}"><span>${d.toLocaleDateString('en',{weekday:'short'}).slice(0,2)}</span><span class="day-dot">${done?'✓':d.getDate()}</span></div>`}).join('')}</div></article></section>
  <section class="section"><div class="quick-grid"><button class="card quick-card" data-home-nutrition style="text-align:left"><div style="display:flex;justify-content:space-between"><span class="quick-label">NUTRITION</span><span class="ring" style="--p:${Math.min(100,kcal/data.profile.calorieTarget*100)}"></span></div><div><div class="quick-value">${kcal.toLocaleString()} <small style="font-size:11px;color:var(--muted)">kcal</small></div><div class="quick-sub">${Math.round(prot)} / ${data.profile.proteinTarget} g protein</div></div></button><button class="card quick-card" data-home-progress style="text-align:left"><span class="quick-label">PROGRESS</span><div><div class="quick-value">${latest.toFixed?latest.toFixed(1):latest} <small style="font-size:11px;color:var(--muted)">kg</small></div><div class="quick-sub">${+diff>=0?'+':''}${diff} kg logged change</div><svg class="spark" viewBox="0 0 120 26"><polyline points="0,21 18,18 34,20 51,13 67,15 83,8 100,11 120,4"/></svg></div></button></div></section>`);
- $('#home-start').onclick=()=>{if(data.activeSession)go('active');else if(today?.workoutId)startWorkout(today.workoutId);else go('workout')};$('[data-home-plan]').onclick=()=>go('plan');$('[data-home-nutrition]').onclick=()=>go('nutrition');$('[data-home-progress]').onclick=()=>go('progress');}
+ $('#home-start').onclick=()=>{if(data.activeSession)go('active');else if(today?.type==='rest')go('plan');else if(today?.workoutId)startWorkout(today.workoutId);else go('workout')};$('[data-home-plan]').onclick=()=>go('plan');$('[data-home-nutrition]').onclick=()=>go('nutrition');$('[data-home-progress]').onclick=()=>go('progress');}
 function sortedSessionsDesc(){return [...data.sessions].sort((a,b)=>String(b.date).localeCompare(String(a.date))||(Number(b.finishedAt||0)-Number(a.finishedAt||0)))}
-function plan(){const days=weekDays(planWeekOffset);const sessions=sortedSessionsDesc().slice(0,8);shell(`${header()}<h1 class="page-title">My Plan</h1><p class="subtle">Your week at a glance. Finished sessions and anything you plan yourself live here.</p><div class="calendar-head"><button class="icon-btn" id="prev-week">‹</button><strong>${days[0].toLocaleDateString('en',{month:'short',day:'numeric'}).toUpperCase()} – ${days[6].toLocaleDateString('en',{month:'short',day:'numeric'}).toUpperCase()}</strong><button class="icon-btn" id="next-week">›</button></div><div class="calendar">${['M','T','W','T','F','S','S'].map(x=>`<div class="cal-label">${x}</div>`).join('')}${days.map(d=>{const has=data.sessions.some(s=>s.date===isoToday(d))||data.planned.some(p=>p.date===isoToday(d));return `<button class="cal-day ${isoToday(d)===isoToday()?'today':''} ${has?'has':''}" data-date="${isoToday(d)}"><span>${d.getDate()}</span>${has?'<span class="cal-dot"></span>':''}</button>`}).join('')}</div><section class="section"><div class="section-head"><h2>Recent activity</h2><button class="text-btn" id="plan-add">+ PLAN</button></div><div class="list">${sessions.length?sessions.map(sessionCard).join(''):`<div class="empty"><strong>No finished sessions yet</strong>Your completed workouts will appear here.</div>`}</div></section>`);$('#plan-add').onclick=()=>openPlanSheet();$$('[data-date]').forEach(b=>b.onclick=()=>openDaySheet(b.dataset.date));$('#prev-week').onclick=()=>{planWeekOffset--;plan()};$('#next-week').onclick=()=>{planWeekOffset++;plan()};}
+function plan(){const days=weekDays(planWeekOffset);const sessions=sortedSessionsDesc().slice(0,8);shell(`${header()}<h1 class="page-title">My Plan</h1><p class="subtle">Your week at a glance. Finished sessions and anything you plan yourself live here.</p><div class="calendar-head"><button class="icon-btn" id="prev-week">‹</button><strong>${days[0].toLocaleDateString('en',{month:'short',day:'numeric'}).toUpperCase()} – ${days[6].toLocaleDateString('en',{month:'short',day:'numeric'}).toUpperCase()}</strong><button class="icon-btn" id="next-week">›</button></div><div class="calendar">${['M','T','W','T','F','S','S'].map(x=>`<div class="cal-label">${x}</div>`).join('')}${days.map(d=>{const dateKey=isoToday(d),planned=data.planned.find(p=>p.date===dateKey),has=data.sessions.some(s=>s.date===dateKey)||!!planned,isRest=planned?.type==='rest';return `<button class="cal-day ${dateKey===isoToday()?'today':''} ${has?'has':''} ${isRest?'rest-planned':''}" data-date="${dateKey}"><span>${d.getDate()}</span>${has?`<span class="cal-dot">${isRest?'R':''}</span>`:''}</button>`}).join('')}</div><section class="section"><div class="section-head"><h2>Recent activity</h2><button class="text-btn" id="plan-add">+ PLAN</button></div><div class="list">${sessions.length?sessions.map(sessionCard).join(''):`<div class="empty"><strong>No finished sessions yet</strong>Your completed workouts will appear here.</div>`}</div></section>`);$('#plan-add').onclick=()=>openPlanSheet();$$('[data-date]').forEach(b=>b.onclick=()=>openDaySheet(b.dataset.date));$('#prev-week').onclick=()=>{planWeekOffset--;plan()};$('#next-week').onclick=()=>{planWeekOffset++;plan()};}
 function sessionCard(s){const cls=s.type==='cardio'?'cardio':s.type==='rehab'?'rehab':'';return `<button class="list-card" style="width:100%;color:inherit;text-align:left" data-session-id="${s.id}"><span class="badge-icon ${cls}">${s.type==='cardio'?'↗':s.type==='rehab'?'R':'S'}</span><span class="grow"><h3>${escapeHtml(s.name)}</h3><p>${s.date} · ${s.durationMin||0} min</p></span><span class="chev">›</span></button>`}
-function openPlanSheet(date=isoToday()){openSheet(`<div class="sheet-head"><div><p class="eyebrow">Plan workout</p><h2>${date}</h2></div><button class="sheet-close" data-close>×</button></div><div class="field"><label>Workout</label><select id="plan-workout"><option value="">Choose...</option>${data.customWorkouts.map(w=>`<option value="${w.id}">${escapeHtml(w.name)} · ${w.type}</option>`).join('')}</select></div><div class="sheet-actions"><button class="primary" id="save-plan">SAVE TO PLAN</button><button class="secondary" id="build-new">CREATE NEW WORKOUT</button></div>`);$('#save-plan').onclick=()=>{const id=$('#plan-workout').value;if(!id)return toast('Choose a workout first');const w=data.customWorkouts.find(w=>w.id===id);data.planned=data.planned.filter(p=>p.date!==date);data.planned.push({date,name:w.name,type:w.type,workoutId:w.id});save();closeSheet();render();toast('Workout added to plan')};$('#build-new').onclick=()=>{closeSheet();go('workout')};}
+function openPlanSheet(date=isoToday()){
+ const existing=data.planned.find(p=>p.date===date),initialType=existing?.type==='rest'?'rest':'workout';
+ openSheet(`<div class="sheet-head"><div><p class="eyebrow">Plan</p><h2>${date}</h2></div><button class="sheet-close" data-close>×</button></div>
+ <div class="tabs plan-kind-tabs"><button class="tab ${initialType==='workout'?'active':''}" data-plan-kind="workout">Workout</button><button class="tab ${initialType==='rest'?'active':''}" data-plan-kind="rest">Rest Day</button></div>
+ <div id="plan-kind-fields"></div>
+ <div class="sheet-actions"><button class="primary" id="save-plan">SAVE TO PLAN</button>${existing?'<button class="danger-btn" id="remove-plan">REMOVE FROM PLAN</button>':''}<button class="secondary" id="build-new">CREATE NEW WORKOUT</button></div>`);
+ let kind=initialType;
+ function paint(){
+  $('#plan-kind-fields').innerHTML=kind==='rest'
+   ?`<article class="card rest-plan-card"><p class="eyebrow">Recovery</p><h3>Rest Day</h3><p class="subtle">No workout. No guilt. The unicorn has been informed.</p></article>`
+   :`<div class="field"><label>Workout</label><select id="plan-workout"><option value="">Choose...</option>${data.customWorkouts.map(w=>`<option value="${w.id}" ${existing?.workoutId===w.id?'selected':''}>${escapeHtml(w.name)} · ${w.type}</option>`).join('')}</select></div>`;
+ }
+ paint();
+ $$('[data-plan-kind]').forEach(b=>b.onclick=()=>{kind=b.dataset.planKind;$$('[data-plan-kind]').forEach(x=>x.classList.toggle('active',x===b));paint()});
+ $('#save-plan').onclick=()=>{
+  data.planned=data.planned.filter(p=>p.date!==date);
+  if(kind==='rest'){
+   data.planned.push({id:uid(),date,name:'Rest Day',type:'rest',workoutId:''});
+   save();closeSheet();render();toast('Rest Day added to plan');return
+  }
+  const id=$('#plan-workout')?.value;if(!id)return toast('Choose a workout first');
+  const w=data.customWorkouts.find(w=>w.id===id);if(!w)return toast('Workout not found');
+  data.planned.push({id:uid(),date,name:w.name,type:w.type,workoutId:w.id});
+  save();closeSheet();render();toast('Workout added to plan')
+ };
+ if($('#remove-plan'))$('#remove-plan').onclick=()=>{data.planned=data.planned.filter(p=>p.date!==date);save();closeSheet();render();toast('Plan removed')};
+ $('#build-new').onclick=()=>{closeSheet();go('workout')};
+}
 function openDaySheet(date){
- const ses=data.sessions.filter(s=>s.date===date),plan=data.planned.find(p=>p.date===date),today=isoToday(),isToday=date===today,isPast=date<today,isFuture=date>today,canLog=!isFuture;
- const heading=plan?escapeHtml(plan.name):ses.length?(isToday?'Today’s training':'Completed training'):(isFuture?'Nothing planned':isToday?'Today':'No workout logged');
- const logLabel=isToday?'LOG WORKOUT':'LOG PAST WORKOUT';
- const actions=[];
- if(plan&&isToday)actions.push(`<button class="primary" id="day-start">START WORKOUT</button>`);
- if(canLog)actions.push(`<button class="${plan&&isToday?'secondary':'primary'}" id="day-log-workout">+ ${logLabel}</button>`);
- if(isFuture||isToday)actions.push(`<button class="secondary" id="day-plan">${plan?'CHANGE PLAN':'PLAN WORKOUT'}</button>`);
- openSheet(`<div class="sheet-head"><div><p class="eyebrow">${date}</p><h2>${heading}</h2></div><button class="sheet-close" data-close>×</button></div>${ses.length?`<div class="list day-session-list">${ses.map(sessionCard).join('')}</div>`:''}${canLog&&!ses.length?`<p class="subtle">${isToday?'Already trained without GAYM? Add it here.':'Forgot to start GAYM that day? Log the workout now.'}</p>`:''}<div class="sheet-actions">${actions.join('')}</div>`);
+ const ses=data.sessions.filter(s=>s.date===date),plan=data.planned.find(p=>p.date===date),today=isoToday(),isToday=date===today,isFuture=date>today,canLog=!isFuture,isRest=plan?.type==='rest';
+ const heading=isRest?'Rest Day':plan?escapeHtml(plan.name):ses.length?(isToday?'Today’s training':'Completed training'):(isFuture?'Nothing planned':isToday?'Today':'No workout logged');
+ const logLabel=isToday?'LOG WORKOUT':'LOG PAST WORKOUT',actions=[];
+ if(plan&&!isRest&&isToday)actions.push(`<button class="primary" id="day-start">START WORKOUT</button>`);
+ if(canLog)actions.push(`<button class="${plan&&!isRest&&isToday?'secondary':'primary'}" id="day-log-workout">+ ${logLabel}</button>`);
+ actions.push(`<button class="secondary" id="day-plan">${plan?'CHANGE PLAN':'PLAN / REST DAY'}</button>`);
+ openSheet(`<div class="sheet-head"><div><p class="eyebrow">${date}</p><h2>${heading}</h2></div><button class="sheet-close" data-close>×</button></div>${isRest?`<article class="card rest-day-detail"><p class="eyebrow">RECOVERY</p><h3>Rest is the assignment.</h3><p class="subtle">This day is deliberately marked for recovery.</p></article>`:''}${ses.length?`<div class="list day-session-list">${ses.map(sessionCard).join('')}</div>`:''}${canLog&&!ses.length&&!isRest?`<p class="subtle">${isToday?'Already trained without GAYM? Add it here.':'Forgot to start GAYM that day? Log the workout now.'}</p>`:''}<div class="sheet-actions">${actions.join('')}</div>`);
  if($('#day-start'))$('#day-start').onclick=()=>{closeSheet();startWorkout(plan.workoutId)};
  if($('#day-log-workout'))$('#day-log-workout').onclick=()=>{closeSheet();openPastWorkoutSheet(date)};
- if($('#day-plan'))$('#day-plan').onclick=()=>{closeSheet();openPlanSheet(date)};
+ $('#day-plan').onclick=()=>{closeSheet();openPlanSheet(date)};
  $$('[data-session-id]').forEach(b=>b.onclick=()=>openSessionDetail(b.dataset.sessionId));
 }
 const KAI_PROGRAM={
@@ -495,6 +655,22 @@ const exerciseLibrary={
 };
 function defaultExercisePrescription(ex,type){if(type==='rehab')return {sets:ex.sets||2,reps:ex.reps||'10 controlled'};const goal=data.profile.goal||'maintain';if(goal==='gain')return {sets:Math.max(3,ex.sets||3),reps:ex.reps||'8-12'};if(goal==='lose')return {sets:ex.sets||3,reps:ex.reps||'8-12'};return {sets:ex.sets||3,reps:ex.reps||'8-12'}}
 function openExercisePicker(type,onPick){const source=exerciseLibrary[type]||exerciseLibrary.strength;let muscle='All';openSheet(`<div class="sheet-head"><div><p class="eyebrow">Exercise library</p><h2>Add exercise</h2></div><button class="sheet-close" data-close>×</button></div><div class="field"><input id="exercise-search" placeholder="Search exercise, muscle or equipment..."></div><div class="tabs exercise-filter" id="exercise-muscles"></div><div class="list" id="exercise-picks" style="margin-top:12px"></div><div class="sheet-actions"><button class="secondary" id="custom-exercise">+ CUSTOM EXERCISE</button></div>`);const muscles=['All',...new Set(source.map(x=>x.muscle.split(' / ')[0]))];$('#exercise-muscles').innerHTML=muscles.map(x=>`<button class="tab ${x==='All'?'active':''}" data-muscle="${escapeHtml(x)}">${escapeHtml(x)}</button>`).join('');function paint(q=''){const query=q.toLowerCase();const arr=source.filter(x=>(muscle==='All'||x.muscle.startsWith(muscle))&&(`${x.name} ${x.muscle} ${x.equipment}`).toLowerCase().includes(query));$('#exercise-picks').innerHTML=arr.length?arr.map((x,i)=>`<button class="list-card exercise-pick" style="width:100%;color:inherit;text-align:left" data-pick-index="${source.indexOf(x)}"><span class="badge-icon">+</span><span class="grow"><h3>${escapeHtml(x.name)}</h3><p>${escapeHtml(x.muscle)} · ${escapeHtml(x.equipment)}</p></span><span class="exercise-rx">${x.sets} × ${escapeHtml(x.reps)}</span></button>`).join(''):`<div class="empty"><strong>No exercises found</strong>Try another search or add a custom exercise.</div>`;$$('[data-pick-index]').forEach(b=>b.onclick=()=>{const ex=source[+b.dataset.pickIndex],rx=defaultExercisePrescription(ex,type);closeSheet();onPick({name:ex.name,muscle:ex.muscle,equipment:ex.equipment,sets:rx.sets,reps:rx.reps})})}paint();$('#exercise-search').oninput=e=>paint(e.target.value);$$('[data-muscle]').forEach(b=>b.onclick=()=>{muscle=b.dataset.muscle;$$('[data-muscle]').forEach(x=>x.classList.toggle('active',x===b));paint($('#exercise-search').value)});$('#custom-exercise').onclick=()=>{const n=prompt('Exercise name');if(n?.trim()){closeSheet();onPick({name:n.trim(),muscle:'Custom',equipment:'Custom',sets:type==='rehab'?2:3,reps:type==='rehab'?'10 controlled':'8-12'})}}}
+let workoutClockTimer=null;
+function sessionElapsedMs(session,now=Date.now()){
+ const start=Number(session?.startedAt)||now;
+ const end=session?.pausedAt?Number(session.pausedAt):now;
+ const paused=Math.max(0,Number(session?.totalPause)||0);
+ return Math.max(0,end-start-paused);
+}
+function sessionElapsedMinutes(session){return Math.floor(sessionElapsedMs(session)/60000)}
+function sessionDurationMinutes(session){return Math.max(1,Math.round(sessionElapsedMs(session)/60000))}
+function stopWorkoutClock(){if(workoutClockTimer){clearInterval(workoutClockTimer);workoutClockTimer=null}}
+function startStrengthClock(session){
+ stopWorkoutClock();
+ const update=()=>{const el=$('#workout-elapsed-min');if(el)el.textContent=String(sessionElapsedMinutes(session))};
+ update();workoutClockTimer=setInterval(update,10000);
+}
+function persistActiveSession(){if(data.activeSession)save()}
 function startWorkoutTemplate(w){activeExerciseOpen=0;data.activeSession={id:uid(),workoutId:w.id||'',name:w.name,type:w.type||'strength',program:w.program||'',programDay:w.programDay||null,startedAt:Date.now(),date:isoToday(),notes:w.notes||'',duration:w.duration||0,distance:w.distance||0,mode:w.mode||'',items:(w.items||[]).map(x=>({name:x.name,muscle:x.muscle||'',equipment:x.equipment||'',targetReps:x.reps||'',note:x.note||'',sets:Array.from({length:x.sets||3},()=>({weight:'',reps:'',done:false}))}))};save();go('active')}
 function startWorkout(id){const w=data.customWorkouts.find(w=>w.id===id);if(!w)return go('workout');startWorkoutTemplate(w)}
 let activeExerciseOpen=0;
@@ -518,31 +694,89 @@ function muscleMap(muscle=''){
   <path d="M73 124 L83 124 L79 143 L70 143 Z" class="${cls(['calf','ankle'])}"/><path d="M97 124 L107 124 L110 143 L101 143 Z" class="${cls(['calf','ankle'])}"/>
  </svg><div><span>Primary area</span><strong>${escapeHtml(muscle||'Custom exercise')}</strong></div></div>`
 }
-function active(){const s=data.activeSession;if(!s)return go('workout');const mins=Math.floor((Date.now()-s.startedAt)/60000);if(s.type==='cardio')return activeCardio(s,mins);const total=s.items.reduce((a,x)=>a+x.sets.length,0),done=s.items.reduce((a,x)=>a+x.sets.filter(z=>z.done).length,0);shell(`${header('Workout',true)}<div class="workout-header"><p class="eyebrow">${s.type} · ${mins} min</p><h1 class="page-title">${escapeHtml(s.name)}</h1><p class="subtle">${done} of ${total} sets completed · changes save automatically</p><div class="progress-line"><span style="width:${total?done/total*100:0}%"></span></div></div><div>${s.items.map((x,i)=>`<details class="session-exercise" data-exercise-index="${i}" ${i===activeExerciseOpen?'open':''}><summary><span class="exercise-num">${i+1}</span><strong>${escapeHtml(x.name)}</strong><span class="chev">⌄</span></summary><div class="sets">${muscleMap(x.muscle)}<div class="set-head"><span>Set</span><span>kg</span><span>reps</span><span>done</span></div>${x.sets.map((z,j)=>`<div class="set-row"><span>${j+1}</span><input inputmode="decimal" value="${escapeHtml(z.weight)}" data-weight="${i}:${j}" placeholder="0"><input inputmode="numeric" value="${escapeHtml(z.reps)}" data-reps="${i}:${j}" placeholder="0"><button class="set-check ${z.done?'done':''}" data-check="${i}:${j}">${z.done?'✓':'○'}</button></div>`).join('')}<div class="set-actions"><button class="small-btn pink" data-addset="${i}">+ ADD SET</button><button class="small-btn danger" data-removeset="${i}" ${x.sets.length<=1?'disabled':''}>− REMOVE SET</button></div><div class="session-note"><textarea data-note="${i}" rows="2" placeholder="Exercise note...">${escapeHtml(x.note||'')}</textarea></div><button class="text-btn danger-text" data-removeexercise="${i}">REMOVE EXERCISE</button></div></details>`).join('')}</div><section class="section"><button class="secondary" id="active-add-exercise">+ ADD EXERCISE</button><button class="primary" id="finish-workout" style="margin-top:8px">FINISH WORKOUT</button><button class="danger-btn" id="cancel-workout" style="margin-top:8px">CANCEL WORKOUT</button></section>`);$('[data-back]').onclick=()=>go('home');$$('[data-weight]').forEach(inp=>inp.oninput=()=>{const[i,j]=inp.dataset.weight.split(':').map(Number);s.items[i].sets[j].weight=inp.value;save()});$$('[data-reps]').forEach(inp=>inp.oninput=()=>{const[i,j]=inp.dataset.reps.split(':').map(Number);s.items[i].sets[j].reps=inp.value;save()});$$('[data-check]').forEach(b=>b.onclick=()=>{const[i,j]=b.dataset.check.split(':').map(Number);activeExerciseOpen=i;s.items[i].sets[j].done=!s.items[i].sets[j].done;save();active()});$$('[data-addset]').forEach(b=>b.onclick=()=>{activeExerciseOpen=+b.dataset.addset;s.items[activeExerciseOpen].sets.push({weight:'',reps:'',done:false});save();active()});$$('[data-removeset]').forEach(b=>b.onclick=()=>{activeExerciseOpen=+b.dataset.removeset;const x=s.items[activeExerciseOpen];if(x.sets.length>1){x.sets.pop();save();active()}});$$('[data-removeexercise]').forEach(b=>b.onclick=()=>{if(s.items.length<=1)return toast('Keep at least one exercise');s.items.splice(+b.dataset.removeexercise,1);save();active()});$('#active-add-exercise').onclick=()=>openExercisePicker(s.type,ex=>{const rx=defaultExercisePrescription(ex,s.type);s.items.push({name:ex.name,muscle:ex.muscle||'',equipment:ex.equipment||'',targetReps:rx.reps,note:'',sets:Array.from({length:rx.sets},()=>({weight:'',reps:'',done:false}))});save();active()});$$('[data-note]').forEach(t=>t.oninput=()=>{s.items[+t.dataset.note].note=t.value;save()});$$('.session-exercise').forEach(d=>d.addEventListener('toggle',()=>{if(d.open)activeExerciseOpen=+d.dataset.exerciseIndex}));$('#finish-workout').onclick=finishSession;$('#cancel-workout').onclick=confirmCancel;}
+function active(){
+ const s=data.activeSession;
+ if(!s){go('workout');return}
+ const mins=sessionElapsedMinutes(s);
+ if(s.type==='cardio'){activeCardio(s,mins);return}
+ const total=s.items.reduce((sum,item)=>sum+(item.sets?.length||0),0);
+ const done=s.items.reduce((sum,item)=>sum+(item.sets||[]).filter(set=>set.done).length,0);
+ shell(`${header('Workout',true)}
+  <div class="workout-header">
+   <p class="eyebrow">${escapeHtml(s.type)} · <span id="workout-elapsed-min">${mins}</span> min</p>
+   <h1 class="page-title">${escapeHtml(s.name)}</h1>
+   <p class="subtle">${done} of ${total} sets completed · changes save automatically</p>
+   <div class="progress-line"><span style="width:${total?done/total*100:0}%"></span></div>
+  </div>
+  <div id="active-session-list">${s.items.map((x,i)=>`<details class="session-exercise" data-exercise-index="${i}" ${i===activeExerciseOpen?'open':''}>
+   <summary><span class="exercise-num">${i+1}</span><strong>${escapeHtml(x.name)}</strong><span class="chev">⌄</span></summary>
+   <div class="sets">${muscleMap(x.muscle)}
+    <div class="set-head"><span>Set</span><span>kg</span><span>reps</span><span>done</span></div>
+    ${(x.sets||[]).map((z,j)=>`<div class="set-row"><span>${j+1}</span><input inputmode="decimal" value="${escapeHtml(z.weight)}" data-weight="${i}:${j}" placeholder="0"><input inputmode="numeric" value="${escapeHtml(z.reps)}" data-reps="${i}:${j}" placeholder="0"><button type="button" class="set-check ${z.done?'done':''}" data-check="${i}:${j}">${z.done?'✓':'○'}</button></div>`).join('')}
+    <div class="set-actions"><button type="button" class="small-btn pink" data-addset="${i}">+ ADD SET</button><button type="button" class="small-btn danger" data-removeset="${i}" ${(x.sets||[]).length<=1?'disabled':''}>− REMOVE SET</button></div>
+    <div class="session-note"><textarea data-note="${i}" rows="2" placeholder="Exercise note...">${escapeHtml(x.note||'')}</textarea></div>
+    <button type="button" class="text-btn danger-text" data-removeexercise="${i}">REMOVE EXERCISE</button>
+   </div>
+  </details>`).join('')}</div>
+  <section class="section active-workout-actions">
+   <button type="button" class="secondary" data-active-action="add-exercise">+ ADD EXERCISE</button>
+   <button type="button" class="primary" data-active-action="finish">FINISH WORKOUT</button>
+   <button type="button" class="danger-btn" data-active-action="cancel">CANCEL WORKOUT</button>
+  </section>`);
+ const screen=$('.screen');
+ if(!screen)return;
+ startStrengthClock(s);
+ const back=$('[data-back]');
+ if(back)back.onclick=()=>go('home');
+ screen.oninput=e=>{
+  const target=e.target;
+  if(target.matches('[data-weight]')){const[i,j]=target.dataset.weight.split(':').map(Number);if(s.items[i]?.sets?.[j]){s.items[i].sets[j].weight=target.value;save()}}
+  else if(target.matches('[data-reps]')){const[i,j]=target.dataset.reps.split(':').map(Number);if(s.items[i]?.sets?.[j]){s.items[i].sets[j].reps=target.value;save()}}
+  else if(target.matches('[data-note]')){const i=+target.dataset.note;if(s.items[i]){s.items[i].note=target.value;save()}}
+ };
+ screen.onclick=e=>{
+  const button=e.target.closest('button');
+  if(!button)return;
+  if(button.dataset.activeAction==='finish'){
+   button.disabled=true;
+   button.textContent='FINISHING…';
+   finishSession();
+   return;
+  }
+  if(button.dataset.activeAction==='cancel'){confirmCancel();return}
+  if(button.dataset.activeAction==='add-exercise'){
+   openExercisePicker(s.type,ex=>{const rx=defaultExercisePrescription(ex,s.type);s.items.push({name:ex.name,muscle:ex.muscle||'',equipment:ex.equipment||'',targetReps:rx.reps,note:'',sets:Array.from({length:rx.sets},()=>({weight:'',reps:'',done:false}))});save();active()});
+   return;
+  }
+  if(button.dataset.check){const[i,j]=button.dataset.check.split(':').map(Number);if(s.items[i]?.sets?.[j]){activeExerciseOpen=i;s.items[i].sets[j].done=!s.items[i].sets[j].done;save();active()}return}
+  if(button.dataset.addset!==undefined){const i=+button.dataset.addset;if(s.items[i]){activeExerciseOpen=i;s.items[i].sets.push({weight:'',reps:'',done:false});save();active()}return}
+  if(button.dataset.removeset!==undefined){const i=+button.dataset.removeset,x=s.items[i];if(x&&x.sets.length>1){activeExerciseOpen=i;x.sets.pop();save();active()}return}
+  if(button.dataset.removeexercise!==undefined){const i=+button.dataset.removeexercise;if(s.items.length<=1){toast('Keep at least one exercise');return}s.items.splice(i,1);activeExerciseOpen=Math.max(0,Math.min(activeExerciseOpen,s.items.length-1));save();active()}
+ };
+ $$('.session-exercise').forEach(details=>details.addEventListener('toggle',()=>{if(details.open)activeExerciseOpen=+details.dataset.exerciseIndex}));
+}
 let cardioTimer=null;
 function activeCardio(s,mins){
  const targetSec=Math.max(60,Number(s.duration||30)*60);
- function elapsedMs(){const end=s.pausedAt||Date.now();return Math.max(0,end-s.startedAt-(s.totalPause||0))}
- function remainingSec(){return Math.max(0,targetSec-Math.floor(elapsedMs()/1000))}
+ function remainingSec(){return Math.max(0,targetSec-Math.floor(sessionElapsedMs(s)/1000))}
  shell(`${header('Cardio',true)}<div class="workout-header"><p class="eyebrow">${escapeHtml(s.mode||'Cardio')}</p><h1 class="page-title">${escapeHtml(s.name)}</h1></div><article class="card timer-card"><p class="eyebrow">Time remaining</p><div class="timer" id="timer">${formatClock(remainingSec())}</div><p class="timer-hint" id="timer-hint">${remainingSec()===0?'Target reached. Finish when you are ready.':`Counting down from ${s.duration||30} min`}</p><div class="timer-controls"><button class="secondary" id="timer-pause">${s.pausedAt?'RESUME':'PAUSE'}</button><button class="primary" id="timer-lap">ADD LAP</button></div></article><section class="section"><div class="metric-grid"><div class="metric"><span>Target time</span><strong>${s.duration||30} min</strong></div><div class="metric"><span>Distance</span><strong>${s.distance||'Add after'}${s.distance?' km':''}</strong></div><div class="metric"><span>Laps</span><strong>${s.laps?.length||0}</strong></div><div class="metric"><span>Status</span><strong id="timer-status">${s.pausedAt?'Paused':remainingSec()===0?'Target reached':'Active'}</strong></div></div></section><section class="section"><button class="primary lime" id="finish-workout">FINISH CARDIO</button><button class="danger-btn" id="cancel-workout" style="margin-top:8px">CANCEL WORKOUT</button></section>`);
  $('[data-back]').onclick=()=>go('home');
  function tick(){const left=remainingSec(),timer=$('#timer');if(timer)timer.textContent=formatClock(left);const status=$('#timer-status'),hint=$('#timer-hint');if(left===0){if(status)status.textContent='Target reached';if(hint)hint.textContent='Target reached. Finish when you are ready.'}}
  tick();clearInterval(cardioTimer);cardioTimer=setInterval(tick,1000);
  $('#timer-pause').onclick=()=>{if(s.pausedAt){s.totalPause=(s.totalPause||0)+(Date.now()-s.pausedAt);s.pausedAt=null}else{s.pausedAt=Date.now()}save();activeCardio(s,mins)};
- $('#timer-lap').onclick=()=>{s.laps=s.laps||[];s.laps.push({at:Date.now(),elapsedMs:elapsedMs()});save();activeCardio(s,mins);toast(`Lap ${s.laps.length} added`)};
+ $('#timer-lap').onclick=()=>{s.laps=s.laps||[];s.laps.push({at:Date.now(),elapsedMs:sessionElapsedMs(s)});save();activeCardio(s,mins);toast(`Lap ${s.laps.length} added`)};
  $('#finish-workout').onclick=()=>openCardioFinishSheet(s);
  $('#cancel-workout').onclick=confirmCancel;
 }
 function formatClock(sec){sec=Math.max(0,Math.floor(Number(sec)||0));return `${String(Math.floor(sec/60)).padStart(2,'0')}:${String(sec%60).padStart(2,'0')}`}
-function sessionDurationMinutes(s){const effectiveEnd=s.pausedAt||Date.now();return Math.max(1,Math.round((effectiveEnd-s.startedAt-(s.totalPause||0))/60000))}
 function openCardioFinishSheet(s){
  const durationMin=sessionDurationMinutes(s);
  openSheet(`<div class="sheet-head"><div><p class="eyebrow">Finish cardio</p><h2>${escapeHtml(s.name)}</h2></div><button class="sheet-close" data-close>×</button></div><p class="subtle">Nice. Add the distance now if you tracked it elsewhere. You can leave it blank.</p><div class="inline-fields"><div class="field"><label>Actual time (min)</label><input id="cardio-finish-duration" type="number" min="1" step="1" value="${durationMin}"></div><div class="field"><label>Distance (km, optional)</label><input id="cardio-finish-distance" type="number" min="0" step="0.01" inputmode="decimal" value="${s.distance||''}" placeholder="e.g. 12.4"></div></div><div class="sheet-actions two"><button class="secondary" data-close>KEEP TRAINING</button><button class="primary lime" id="cardio-save-finish">SAVE CARDIO</button></div>`);
  $('#cardio-save-finish').onclick=()=>{const mins=Math.max(1,Math.round(Number($('#cardio-finish-duration').value)||durationMin));const distance=Math.max(0,Number($('#cardio-finish-distance').value)||0);closeSheet();finalizeSession({durationMin:mins,distance:distance||0})};
 }
 function finishSession(){const s=data.activeSession;if(!s)return;if(s.type==='cardio')return openCardioFinishSheet(s);finalizeSession()}
-function finalizeSession(overrides={}){const s=data.activeSession;if(!s)return;const durationMin=overrides.durationMin||sessionDurationMinutes(s);let doneSets=0,totalSets=0;if(s.type!=='cardio')s.items.forEach(x=>x.sets.forEach(z=>{totalSets++;if(z.done)doneSets++}));const comment=completionSass(s,durationMin,doneSets,totalSets);const finished={...s,...overrides,durationMin,doneSets,totalSets,finishedAt:Date.now(),completed:true};const prs=detectExercisePRs(finished);data.sessions.push(finished);data.activeSession=null;queuePRNotifications(finished,prs);save();clearInterval(cardioTimer);const completionText=totalSets?` · ${doneSets}/${totalSets} sets`:finished.distance?` · ${finished.distance} km`:'';openSheet(`<div style="text-align:center;padding:8px 0"><p class="eyebrow">Workout complete</p><h2 style="font-size:30px;margin:4px 0">${escapeHtml(comment)}</h2><p class="subtle">${durationMin} min${completionText}</p><div class="sheet-actions"><button class="primary" id="finish-home">BACK TO HOME</button><button class="secondary" id="finish-progress">VIEW PROGRESS</button></div></div>`);$('#finish-home').onclick=()=>{closeSheet();go('home')};$('#finish-progress').onclick=()=>{closeSheet();go('progress')}}
-function confirmCancel(){openSheet(`<div class="sheet-head"><div><p class="eyebrow">Cancel workout?</p><h2>Your current log will be removed.</h2></div><button class="sheet-close" data-close>×</button></div><div class="sheet-actions"><button class="danger-btn" id="really-cancel">DELETE ACTIVE WORKOUT</button><button class="secondary" data-close>KEEP TRAINING</button></div>`);$('#really-cancel').onclick=()=>{data.activeSession=null;save();clearInterval(cardioTimer);closeSheet();go('home')}}
+function finalizeSession(overrides={}){const s=data.activeSession;if(!s)return;const durationMin=overrides.durationMin||sessionDurationMinutes(s);let doneSets=0,totalSets=0;if(s.type!=='cardio')s.items.forEach(x=>x.sets.forEach(z=>{totalSets++;if(z.done)doneSets++}));const comment=completionSass(s,durationMin,doneSets,totalSets);const finished={...s,...overrides,durationMin,doneSets,totalSets,finishedAt:Date.now(),completed:true};data.sessions.push(finished);data.activeSession=null;recomputePRHistory({notifyNew:true});save();clearInterval(cardioTimer);stopWorkoutClock();const completionText=totalSets?` · ${doneSets}/${totalSets} sets`:finished.distance?` · ${finished.distance} km`:'';openSheet(`<div style="text-align:center;padding:8px 0"><p class="eyebrow">Workout complete</p><h2 style="font-size:30px;margin:4px 0">${escapeHtml(comment)}</h2><p class="subtle">${durationMin} min${completionText}</p><div class="sheet-actions"><button class="primary" id="finish-home">BACK TO HOME</button><button class="secondary" id="finish-progress">VIEW PROGRESS</button></div></div>`);$('#finish-home').onclick=()=>{closeSheet();go('home')};$('#finish-progress').onclick=()=>{closeSheet();go('progress')}}
+function confirmCancel(){openSheet(`<div class="sheet-head"><div><p class="eyebrow">Cancel workout?</p><h2>Your current log will be removed.</h2></div><button class="sheet-close" data-close>×</button></div><div class="sheet-actions"><button class="danger-btn" id="really-cancel">DELETE ACTIVE WORKOUT</button><button class="secondary" data-close>KEEP TRAINING</button></div>`);$('#really-cancel').onclick=()=>{data.activeSession=null;save();clearInterval(cardioTimer);stopWorkoutClock();closeSheet();go('home')}}
 function exerciseLog(){
  const map=new Map();
  data.sessions.filter(s=>s.type!=='cardio'&&s.completed!==false).forEach(session=>{
@@ -576,7 +810,7 @@ function openExerciseProgress(name){
  const ex=exerciseLog().find(x=>x.name===name);if(!ex)return toast('No exercise history yet');const current=bestSetFromSession(ex.sessions.at(-1)),previous=bestSetFromSession(ex.sessions.at(-2)),best=bestSetEver(ex),pts=exerciseTrendPoints(ex),delta=current&&previous?current.score-previous.score:null;
  openSheet(`<div class="sheet-head"><div><p class="eyebrow">Exercise progress</p><h2>${escapeHtml(ex.name)}</h2></div><button class="sheet-close" data-close>×</button></div>${muscleMap(ex.muscle)}<div class="exercise-detail-meta"><span>${escapeHtml(ex.muscle)}</span><span>${escapeHtml(ex.equipment)}</span></div><div class="metric-grid exercise-detail-metrics"><div class="metric"><span>Current</span><strong>${current?`${current.weight} kg × ${current.reps}`:'–'}</strong></div><div class="metric"><span>Previous</span><strong>${previous?`${previous.weight} kg × ${previous.reps}`:'–'}</strong></div><div class="metric"><span>Best ever</span><strong>${best?`${best.weight} kg × ${best.reps}`:'–'}</strong></div><div class="metric"><span>Est. 1RM</span><strong>${current?`${current.score.toFixed(1)} kg`:'–'}</strong></div></div>${delta!==null?`<div class="exercise-delta ${delta>=0?'up':'down'}"><strong>${delta>=0?'↑':'↓'} ${Math.abs(delta).toFixed(1)} kg estimated strength</strong><span>vs previous session</span></div>`:''}<article class="card exercise-chart"><div class="section-head"><h3>Strength trend</h3><span class="eyebrow">EST. 1RM</span></div>${pts?`<svg viewBox="0 0 120 120" preserveAspectRatio="none"><line class="grid" x1="0" y1="25" x2="120" y2="25"/><line class="grid" x1="0" y1="65" x2="120" y2="65"/><line class="grid" x1="0" y1="105" x2="120" y2="105"/><polyline class="line" points="${pts}"/></svg>`:'<div class="empty">Log another session to build the trend.</div>'}</article><section class="exercise-history-section"><div class="section-head"><h3>Recent sessions</h3><span class="eyebrow">WEIGHT × REPS</span></div><div class="exercise-history-list">${[...ex.sessions].reverse().slice(0,8).map(s=>{const b=bestSetFromSession(s);return `<div class="exercise-history-row"><span>${s.date}</span><strong>${b.weight} kg × ${b.reps}</strong><small>${b.score.toFixed(1)} kg est. 1RM</small></div>`}).join('')}</div></section>`);
 }
-function calcStreak(){const set=new Set(data.sessions.map(s=>s.date));let d=new Date(),n=0;for(let i=0;i<365;i++){const key=isoToday(d);if(set.has(key))n++;else if(i>0)break;d.setDate(d.getDate()-1)}return n}
+function calcStreak(){return calcStreakFromDates(null)}
 function openSessionDetail(id){
  const s=data.sessions.find(x=>x.id===id);if(!s)return;
  const cardioItems=s.type==='cardio'&&s.items?.length?`<div class="list history-work-list" style="margin-top:14px">${s.items.map((x,i)=>`<div class="list-card"><span class="badge-icon cardio">${i+1}</span><span class="grow"><h3>${escapeHtml(x.name||x.mode||'Cardio')}</h3><p>${x.durationMin?`${x.durationMin} min`:''}${x.durationMin&&x.distance?' · ':''}${x.distance?`${x.distance} km`:''}</p></span></div>`).join('')}</div>`:'';
@@ -584,7 +818,7 @@ function openSessionDetail(id){
  openSheet(`<div class="sheet-head"><div><p class="eyebrow">${s.date} · ${s.type}${s.manualEntry?' · manually logged':''}</p><h2>${escapeHtml(s.name)}</h2></div><button class="sheet-close" data-close>×</button></div><div class="metric-grid" style="margin-top:14px"><div class="metric"><span>Duration</span><strong>${s.durationMin||0} min</strong></div><div class="metric"><span>${s.type==='cardio'?'Distance':'Sets completed'}</span><strong>${s.type==='cardio'?(s.distance?`${s.distance} km`:'–'):(s.doneSets||0)+' / '+(s.totalSets||0)}</strong></div></div>${cardioItems}${strengthItems}${s.notes?`<article class="card history-notes"><span class="eyebrow">Notes</span><p>${escapeHtml(s.notes)}</p></article>`:''}<div class="sheet-actions"><button class="danger-btn" id="delete-history-workout">DELETE WORKOUT</button></div>`);
  $('#delete-history-workout').onclick=()=>confirmDeleteSession(s.id);
 }
-function confirmDeleteSession(id){const s=data.sessions.find(x=>x.id===id);if(!s)return;openSheet(`<div class="sheet-head"><div><p class="eyebrow">Delete workout?</p><h2>${escapeHtml(s.name)}</h2></div><button class="sheet-close" data-close>×</button></div><p class="subtle">This removes the workout from History, your calendar and exercise progress. This cannot be undone.</p><div class="sheet-actions two"><button class="secondary" data-close>KEEP IT</button><button class="danger-btn" id="confirm-delete-session">DELETE WORKOUT</button></div>`);$('#confirm-delete-session').onclick=()=>{data.sessions=data.sessions.filter(x=>x.id!==id);save();closeSheet();render();toast('Workout deleted')}}
+function confirmDeleteSession(id){const s=data.sessions.find(x=>x.id===id);if(!s)return;openSheet(`<div class="sheet-head"><div><p class="eyebrow">Delete workout?</p><h2>${escapeHtml(s.name)}</h2></div><button class="sheet-close" data-close>×</button></div><p class="subtle">This removes the workout from History, your calendar and exercise progress. This cannot be undone.</p><div class="sheet-actions two"><button class="secondary" data-close>KEEP IT</button><button class="danger-btn" id="confirm-delete-session">DELETE WORKOUT</button></div>`);$('#confirm-delete-session').onclick=()=>{data.sessions=data.sessions.filter(x=>x.id!==id);recomputePRHistory({notifyNew:false});save();closeSheet();render();toast('Workout deleted · progress recalculated')}}
 function openHistorySheet(){
  openSheet(`<div class="sheet-head"><div><p class="eyebrow">Activity</p><h2>Workout history</h2></div><button class="sheet-close" data-close>×</button></div><p class="subtle">To add a forgotten workout, open My Plan and tap today or any earlier date.</p><div class="list" style="margin-top:14px">${data.sessions.length?sortedSessionsDesc().map(sessionCard).join(''):`<div class="empty">No workouts yet.</div>`}</div>`);
  $$('[data-session-id]').forEach(b=>b.onclick=()=>openSessionDetail(b.dataset.sessionId));
@@ -619,7 +853,7 @@ function openPastWorkoutSheet(initialDate=isoToday(),draft=null){
  $$('[data-past-remove-ex]').forEach(b=>b.onclick=()=>{capture();state.items.splice(+b.dataset.pastRemoveEx,1);openPastWorkoutSheet(state.date,state)});
  if($('#past-add-cardio'))$('#past-add-cardio').onclick=()=>{capture();state.cardioActivities.push(pastEmptyCardioActivity('Cycling'));openPastWorkoutSheet(state.date,state)};
  $$('[data-past-remove-cardio]').forEach(b=>b.onclick=()=>{capture();state.cardioActivities.splice(+b.dataset.pastRemoveCardio,1);if(!state.cardioActivities.length)state.cardioActivities=[pastEmptyCardioActivity('Running')];openPastWorkoutSheet(state.date,state)});
- $('#save-past-workout').onclick=()=>{capture();const date=state.date,name=state.name.trim();if(!date||date>isoToday())return toast('Choose a valid date');if(!name)return toast('Give the workout a name');let items=[],doneSets=0,totalSets=0,distance=0,mode='',durationMin=Math.max(1,Math.round(Number(state.durationMin)||0));if(state.type==='cardio'){const acts=state.cardioActivities.filter(a=>a.mode);if(!acts.length)return toast('Add at least one cardio activity');const activityMinutes=acts.reduce((n,a)=>n+(Number(a.durationMin)||0),0);if(activityMinutes>0)durationMin=Math.round(activityMinutes);distance=Math.round(acts.reduce((n,a)=>n+(Number(a.distance)||0),0)*100)/100;mode=acts.length===1?acts[0].mode:'Mixed cardio';items=acts.map(a=>({name:a.mode,muscle:'Cardio',equipment:'',durationMin:Number(a.durationMin)||0,distance:Number(a.distance)||0,sets:[]}))}else{if(!state.items.length)return toast('Add at least one exercise');items=state.items.map(x=>({...x,sets:x.sets.map(z=>({...z,done:true}))}));totalSets=items.reduce((n,x)=>n+x.sets.length,0);doneSets=totalSets}const startedAt=new Date(`${date}T12:00:00`).getTime();data.sessions.push({id:uid(),workoutId:state.templateId||'',name,type:state.type,date,durationMin,distance,mode,notes:state.notes.trim(),items,doneSets,totalSets,startedAt,finishedAt:startedAt+durationMin*60000,completed:true,manualEntry:true});save();closeSheet();render();toast('Workout added to history')};
+ $('#save-past-workout').onclick=()=>{capture();const date=state.date,name=state.name.trim();if(!date||date>isoToday())return toast('Choose a valid date');if(!name)return toast('Give the workout a name');let items=[],doneSets=0,totalSets=0,distance=0,mode='',durationMin=Math.max(1,Math.round(Number(state.durationMin)||0));if(state.type==='cardio'){const acts=state.cardioActivities.filter(a=>a.mode);if(!acts.length)return toast('Add at least one cardio activity');const activityMinutes=acts.reduce((n,a)=>n+(Number(a.durationMin)||0),0);if(activityMinutes>0)durationMin=Math.round(activityMinutes);distance=Math.round(acts.reduce((n,a)=>n+(Number(a.distance)||0),0)*100)/100;mode=acts.length===1?acts[0].mode:'Mixed cardio';items=acts.map(a=>({name:a.mode,muscle:'Cardio',equipment:'',durationMin:Number(a.durationMin)||0,distance:Number(a.distance)||0,sets:[]}))}else{if(!state.items.length)return toast('Add at least one exercise');items=state.items.map(x=>({...x,sets:x.sets.map(z=>({...z,done:true}))}));totalSets=items.reduce((n,x)=>n+x.sets.length,0);doneSets=totalSets}const startedAt=new Date(`${date}T12:00:00`).getTime(),manualSession={id:uid(),workoutId:state.templateId||'',name,type:state.type,date,durationMin,distance,mode,notes:state.notes.trim(),items,doneSets,totalSets,startedAt,finishedAt:startedAt+durationMin*60000,completed:true,manualEntry:true};data.sessions.push(manualSession);recomputePRHistory({notifyNew:true});save();closeSheet();render();toast((manualSession.prs||[]).length?'Workout added · PB history updated':'Workout added to history')};
 }
 function openMeasureSheet(){openSheet(`<div class="sheet-head"><div><p class="eyebrow">Body progress</p><h2>Log measurements</h2></div><button class="sheet-close" data-close>×</button></div><div class="inline-fields"><div class="field"><label>Weight (kg)</label><input id="m-weight" type="number" step="0.1" value="${data.measurements.at(-1)?.weight||data.profile.weight}"></div><div class="field"><label>Waist (cm)</label><input id="m-waist" type="number" step="0.1"></div></div><div class="inline-fields"><div class="field"><label>Chest (cm)</label><input id="m-chest" type="number" step="0.1"></div><div class="field"><label>Hips (cm)</label><input id="m-hips" type="number" step="0.1"></div></div><div class="field"><label>Note</label><textarea id="m-note" rows="2"></textarea></div><div class="sheet-actions"><button class="primary" id="m-save">SAVE MEASUREMENTS</button></div>`);$('#m-save').onclick=()=>{const weight=+$('#m-weight').value;if(!weight)return toast('Enter your weight');data.measurements.push({date:isoToday(),weight,waist:+$('#m-waist').value||null,chest:+$('#m-chest').value||null,hips:+$('#m-hips').value||null,note:$('#m-note').value.trim()});data.profile.weight=weight;if(data.profile.autoTargets)applyAutoTargets();save();closeSheet();render();toast('Measurements saved')}}
 let nutritionTab='today',recipeCategory='All',recipeQuery='',recipeLibraryView='all';
@@ -644,7 +878,7 @@ function nutrition(){
   shell(`${header()}<h1 class="page-title">Nutrition</h1>${tabs}<section class="section"><p class="eyebrow">Smart picks for today</p><article class="card recipe-need-card"><div><span>You have left</span><strong>${Math.round(leftK).toLocaleString()} kcal</strong></div><div><span>Protein left</span><strong>${Math.round(leftP)} g</strong></div><div><span>Fiber</span><strong>${Math.round(fiber)} / ${ft} g</strong></div></article></section><section class="section"><div class="recipe-library-head"><div class="recipe-library-tabs"><button data-rview="all" class="${recipeLibraryView==='all'?'active':''}">ALL</button><button data-rview="favorites" class="${recipeLibraryView==='favorites'?'active':''}">FAVORITES</button><button data-rview="mine" class="${recipeLibraryView==='mine'?'active':''}">MY RECIPES</button></div><button class="primary compact" id="create-recipe">+ CREATE</button></div><div class="recipe-search"><input id="recipe-search" value="${escapeHtml(recipeQuery)}" placeholder="Search recipes or cuisines..."></div><div class="recipe-cats">${RECIPE_CATEGORIES.map(x=>`<button data-rcat="${escapeHtml(x)}" class="${recipeCategory===x?'active':''}">${escapeHtml(x)}</button>`).join('')}</div><p class="bottom-note"><strong>Bottom-friendly</strong> is only shown on recipes that provide at least 10 g fiber per serving and meet the 14 g fiber / 1,000 kcal benchmark. It is meant to support regularity over time, not guarantee same-day prep. Increase fiber gradually and use what your gut tolerates.</p>${!matches.length?`<div class="empty"><strong>${recipeLibraryView==='mine'?'No custom recipes yet':recipeLibraryView==='favorites'?'No favorites yet':'No recipes found'}</strong>${recipeLibraryView==='mine'?'Create your own recipe with a photo, ingredients, instructions and macros.':recipeLibraryView==='favorites'?'Tap the heart on any recipe to save it here.':'Try another search or category.'}</div>`:`<div class="recipe-grid">${matches.map(recipeCard).join('')}</div>`}</section>`);
   bindNutritionTabs();$('#recipe-search').oninput=e=>{recipeQuery=e.target.value;nutrition()};$$('[data-rcat]').forEach(b=>b.onclick=()=>{recipeCategory=b.dataset.rcat;nutrition()});$$('[data-rview]').forEach(b=>b.onclick=()=>{recipeLibraryView=b.dataset.rview;recipeCategory='All';recipeQuery='';nutrition()});$('#create-recipe').onclick=()=>openRecipeBuilder();bindRecipeCards();hydrateRecipeImages();return;
  }
- shell(`${header()}<h1 class="page-title">Nutrition</h1>${tabs}<p class="subtle">Daily targets adapt to your goal: <strong style="color:var(--text)">${goalLabel(data.profile.goal)}</strong>.</p><section class="section"><article class="card" style="padding:18px"><div class="food-ring" style="--p:${perc}"><div><strong>${Math.round(k).toLocaleString()}</strong><small>/ ${data.profile.calorieTarget.toLocaleString()} kcal</small></div></div>${macro('Protein',p,data.profile.proteinTarget,'g')}${macro('Carbs',c,data.profile.carbTarget,'g')}${macro('Fat',fat,data.profile.fatTarget,'g')}${macro('Fiber',fiber,ft,'g')}</article></section><section class="section"><div class="section-head"><h2>Today's meals</h2><button class="text-btn" id="add-food">+ ADD</button></div><div class="list">${f.length?f.map(n=>`<div class="list-card"><span class="badge-icon cardio">F</span><span class="grow"><h3>${escapeHtml(n.name)}</h3><p>${n.kcal} kcal · ${n.protein||0} g protein${n.fiber?` · ${n.fiber} g fiber`:''}</p></span><button class="small-btn danger" data-food-remove="${n.id}">REMOVE</button></div>`).join(''):`<div class="empty"><strong>No food logged today</strong>Add a meal or pick a recipe.</div>`}</div></section><section class="section"><div class="section-head"><h2>Recipes for your goal</h2><button class="text-btn" id="see-recipes">SEE ALL</button></div><div class="quick-recipe-row">${sortedRecipes(allRecipes()).slice(0,3).map(recipeCard).join('')}</div></section>`);
+ shell(`${header()}<h1 class="page-title">Nutrition</h1>${tabs}<p class="subtle">Daily targets adapt to your goal: <strong style="color:var(--text)">${goalLabel(data.profile.goal)}</strong>.</p><section class="section"><article class="card" style="padding:18px"><div class="food-ring" style="--p:${perc}"><div><strong>${Math.round(k).toLocaleString()}</strong><small>/ ${data.profile.calorieTarget.toLocaleString()} kcal</small></div></div>${macro('Protein',p,data.profile.proteinTarget,'g','cyan')}${macro('Carbs',c,data.profile.carbTarget,'g','yellow')}${macro('Fat',fat,data.profile.fatTarget,'g','orange')}${macro('Fiber',fiber,ft,'g','lime')}</article></section><section class="section"><div class="section-head"><h2>Today's meals</h2><button class="text-btn" id="add-food">+ ADD</button></div><div class="list">${f.length?f.map(n=>`<div class="list-card"><span class="badge-icon cardio">F</span><span class="grow"><h3>${escapeHtml(n.name)}</h3><p>${n.kcal} kcal · ${n.protein||0} g protein${n.fiber?` · ${n.fiber} g fiber`:''}</p></span><button class="small-btn danger" data-food-remove="${n.id}">REMOVE</button></div>`).join(''):`<div class="empty"><strong>No food logged today</strong>Add a meal or pick a recipe.</div>`}</div></section><section class="section"><div class="section-head"><h2>Recipes for your goal</h2><button class="text-btn" id="see-recipes">SEE ALL</button></div><div class="quick-recipe-row">${sortedRecipes(allRecipes()).slice(0,3).map(recipeCard).join('')}</div></section>`);
  bindNutritionTabs();$('#add-food').onclick=openFoodSheet;$('#see-recipes').onclick=()=>{nutritionTab='recipes';nutrition()};$$('[data-food-remove]').forEach(b=>b.onclick=()=>{data.nutrition=data.nutrition.filter(n=>n.id!==b.dataset.foodRemove);save();nutrition()});bindRecipeCards();hydrateRecipeImages();
 }
 function bindNutritionTabs(){$$('[data-ntab]').forEach(b=>b.onclick=()=>{nutritionTab=b.dataset.ntab;nutrition()})}
@@ -654,7 +888,11 @@ function toggleRecipeFavorite(id){data.recipeFavorites=data.recipeFavorites||[];
 async function openRecipe(id){const r=findRecipe(id);if(!r)return;let img=recipeImageSrc(r);if(r.custom)img=await getRecipeImage(r.id)||RECIPE_FALLBACK;const fit=recipeFit(r)<.75?'GOOD MATCH TODAY':'RECIPE',customActions=r.custom?`<div class="recipe-owner-actions"><button class="secondary" id="recipe-edit">EDIT RECIPE</button><button class="secondary danger-outline" id="recipe-delete">DELETE</button></div>`:'';openSheet(`<div class="recipe-hero"><img src="${img}" alt="${escapeHtml(r.name)}"></div><div class="sheet-head recipe-sheet-head"><div><p class="eyebrow">${fit}</p><h2>${escapeHtml(r.name)}</h2></div><button class="sheet-close" data-close>×</button></div><div class="recipe-tags big">${recipeTags(r).map(t=>`<span>${escapeHtml(t)}</span>`).join('')}</div><div class="recipe-macros"><div><strong>${r.kcal}</strong><span>kcal</span></div><div><strong>${r.protein}g</strong><span>protein</span></div><div><strong>${r.carbs}g</strong><span>carbs</span></div><div><strong>${r.fat}g</strong><span>fat</span></div><div><strong>${r.fiber||0}g</strong><span>fiber</span></div></div><p class="recipe-time">~${r.time||0} min · ${r.servings||1} serving${(r.servings||1)===1?'':'s'} · macros per serving</p><h3 class="recipe-section-title">Ingredients</h3><ul class="ingredient-list">${(r.ingredients||[]).map(x=>`<li>${escapeHtml(x)}</li>`).join('')}</ul><h3 class="recipe-section-title">Instructions</h3><ol class="step-list">${(r.steps||[]).map(x=>`<li><span>${escapeHtml(x)}</span></li>`).join('')}</ol>${customActions}<div class="sheet-actions"><button class="primary" id="recipe-add">ADD TO TODAY</button></div>`);$('#recipe-add').onclick=()=>{data.nutrition.push({id:uid(),date:isoToday(),name:r.name,kcal:r.kcal,protein:r.protein,carbs:r.carbs,fat:r.fat,fiber:r.fiber||0,recipeId:r.id});save();closeSheet();nutritionTab='today';nutrition();toast('Recipe added to today')};if(r.custom){$('#recipe-edit').onclick=()=>openRecipeBuilder(r.id);$('#recipe-delete').onclick=()=>confirmDeleteRecipe(r.id)}}
 function confirmDeleteRecipe(id){const r=findRecipe(id);if(!r?.custom)return;openSheet(`<div class="sheet-head"><div><p class="eyebrow">My Recipes</p><h2>Delete recipe?</h2></div><button class="sheet-close" data-close>×</button></div><p class="subtle">${escapeHtml(r.name)} will be removed from My Recipes. Meals already logged today stay in your history.</p><div class="sheet-actions two"><button class="secondary" data-close>CANCEL</button><button class="primary danger-fill" id="confirm-recipe-delete">DELETE RECIPE</button></div>`);$('#confirm-recipe-delete').onclick=async()=>{data.customRecipes=(data.customRecipes||[]).filter(x=>x.id!==id);data.recipeFavorites=(data.recipeFavorites||[]).filter(x=>x!==id);await deleteRecipeImage(id);save();closeSheet();nutritionTab='recipes';recipeLibraryView='mine';nutrition();toast('Recipe deleted')}}
 async function openRecipeBuilder(editId=null){const existing=editId?findRecipe(editId):null;if(existing&&!existing.custom)return;let selectedFile=null,removeExistingImage=false,previewUrl=existing?recipeImageSrc(existing):RECIPE_FALLBACK;if(existing)previewUrl=await getRecipeImage(existing.id)||RECIPE_FALLBACK;openSheet(`<div class="sheet-head"><div><p class="eyebrow">My Recipes</p><h2>${existing?'Edit recipe':'Create recipe'}</h2></div><button class="sheet-close" data-close>×</button></div><div class="recipe-photo-editor"><img id="custom-recipe-preview" src="${previewUrl}" alt="Recipe photo preview"><label class="secondary photo-button" for="custom-recipe-photo">CHOOSE / TAKE PHOTO</label><input id="custom-recipe-photo" class="visually-hidden" type="file" accept="image/*"><button class="text-btn" id="remove-recipe-photo" type="button">REMOVE PHOTO</button><small>Your photo uses the exact same crop and image area as every other recipe card.</small></div><div class="field"><label>Recipe name</label><input id="cr-name" value="${escapeHtml(existing?.name||'')}" placeholder="e.g. High Protein Lasagna"></div><div class="inline-fields"><div class="field"><label>Servings</label><input id="cr-servings" type="number" min="1" max="20" value="${existing?.servings||1}"></div><div class="field"><label>Time (min)</label><input id="cr-time" type="number" min="1" value="${existing?.time||30}"></div></div><div class="field"><label>Category</label><select id="cr-cuisine">${RECIPE_CATEGORIES.filter(x=>x!=='All'&&x!=='Bottom-friendly').map(x=>`<option value="${escapeHtml(x)}" ${existing?.cuisine===x?'selected':''}>${escapeHtml(x)}</option>`).join('')}<option value="Other" ${existing?.cuisine==='Other'?'selected':''}>Other</option></select></div><p class="eyebrow form-divider">Macros per serving</p><div class="inline-fields"><div class="field"><label>Calories</label><input id="cr-kcal" type="number" min="0" value="${existing?.kcal||''}"></div><div class="field"><label>Protein (g)</label><input id="cr-protein" type="number" min="0" step="0.1" value="${existing?.protein||''}"></div></div><div class="inline-fields"><div class="field"><label>Carbs (g)</label><input id="cr-carbs" type="number" min="0" step="0.1" value="${existing?.carbs||''}"></div><div class="field"><label>Fat (g)</label><input id="cr-fat" type="number" min="0" step="0.1" value="${existing?.fat||''}"></div></div><div class="field"><label>Fiber (g)</label><input id="cr-fiber" type="number" min="0" step="0.1" value="${existing?.fiber||''}"></div><div class="field"><label>Ingredients · one per line</label><textarea id="cr-ingredients" rows="7" placeholder="200 g lean ground beef&#10;90 g whole-wheat pasta&#10;100 g crushed tomatoes">${escapeHtml((existing?.ingredients||[]).join('\n'))}</textarea></div><div class="field"><label>Instructions · one step per line</label><textarea id="cr-steps" rows="7" placeholder="Cook the pasta.&#10;Brown the beef.&#10;Combine and serve.">${escapeHtml((existing?.steps||[]).join('\n'))}</textarea></div><div class="field"><label>Extra tags · comma separated</label><input id="cr-tags" value="${escapeHtml((existing?.tags||[]).filter(x=>x!==existing?.cuisine&&x!=='Bottom-friendly').join(', '))}" placeholder="High protein, Vegetarian"></div><div class="sheet-actions"><button class="primary" id="save-custom-recipe">${existing?'SAVE CHANGES':'CREATE RECIPE'}</button></div>`);const input=$('#custom-recipe-photo'),preview=$('#custom-recipe-preview');input.onchange=()=>{const file=input.files?.[0];if(!file)return;selectedFile=file;removeExistingImage=false;const u=URL.createObjectURL(file);preview.src=u;preview.onload=()=>URL.revokeObjectURL(u)};$('#remove-recipe-photo').onclick=()=>{selectedFile=null;removeExistingImage=true;preview.src=RECIPE_FALLBACK};$('#save-custom-recipe').onclick=async()=>{const name=$('#cr-name').value.trim(),kcal=+$('#cr-kcal').value,protein=+$('#cr-protein').value,ingredients=$('#cr-ingredients').value.split('\n').map(x=>x.trim()).filter(Boolean),steps=$('#cr-steps').value.split('\n').map(x=>x.trim()).filter(Boolean);if(!name||!kcal||!ingredients.length||!steps.length)return toast('Add name, calories, ingredients and steps');const id=existing?.id||`custom-recipe-${uid()}`,cuisine=$('#cr-cuisine').value,extraTags=$('#cr-tags').value.split(',').map(x=>x.trim()).filter(x=>x&&x!=='Bottom-friendly'),tags=[...new Set([cuisine,...extraTags])],recipe={id,name,cuisine,meal:existing?.meal||'Custom',custom:true,servings:Math.max(1,+$('#cr-servings').value||1),time:Math.max(1,+$('#cr-time').value||30),kcal:Math.round(kcal),protein:Math.round(protein*10)/10,carbs:Math.round((+$('#cr-carbs').value||0)*10)/10,fat:Math.round((+$('#cr-fat').value||0)*10)/10,fiber:Math.round((+$('#cr-fiber').value||0)*10)/10,tags,ingredients,steps};if(selectedFile){try{const blob=await compressRecipeImage(selectedFile);if(blob)await putRecipeImage(id,blob)}catch{return toast('Could not save that photo')}}else if(removeExistingImage)await deleteRecipeImage(id);if(existing)data.customRecipes=data.customRecipes.map(x=>x.id===id?recipe:x);else data.customRecipes.push(recipe);save();closeSheet();nutritionTab='recipes';recipeLibraryView='mine';recipeCategory='All';recipeQuery='';nutrition();toast(existing?'Recipe updated':'Recipe created')}}
-function macro(name,v,target,unit){return `<div class="macro"><div class="macro-head"><span>${name}</span><span>${Math.round(v)} / ${target} ${unit}</span></div><div class="macro-bar"><span style="width:${Math.min(100,v/target*100)}%"></span></div></div>`}
+function macro(name,value,target,unit,tone='pink'){
+ const safeValue=Math.max(0,Number(value)||0),safeTarget=Math.max(1,Number(target)||1);
+ const percent=Math.max(0,Math.min(100,(safeValue/safeTarget)*100));
+ return `<div class="macro macro-${tone}"><div class="macro-head"><span>${escapeHtml(name)}</span><span>${Math.round(safeValue)} / ${Math.round(safeTarget)} ${escapeHtml(unit)}</span></div><div class="macro-bar" role="progressbar" aria-label="${escapeHtml(name)}" aria-valuemin="0" aria-valuemax="${Math.round(safeTarget)}" aria-valuenow="${Math.round(safeValue)}"><span style="width:${percent.toFixed(1)}%"></span></div></div>`;
+}
 function openFoodSheet(){openSheet(`<div class="sheet-head"><div><p class="eyebrow">Nutrition</p><h2>Add food</h2></div><button class="sheet-close" data-close>×</button></div><div class="field"><label>Name</label><input id="f-name" placeholder="e.g. Breakfast"></div><div class="inline-fields"><div class="field"><label>Calories</label><input id="f-kcal" type="number"></div><div class="field"><label>Protein (g)</label><input id="f-protein" type="number"></div></div><div class="inline-fields"><div class="field"><label>Carbs (g)</label><input id="f-carbs" type="number"></div><div class="field"><label>Fat (g)</label><input id="f-fat" type="number"></div></div><div class="field"><label>Fiber (g)</label><input id="f-fiber" type="number" placeholder="Optional"></div><div class="sheet-actions"><button class="primary" id="f-save">ADD TO TODAY</button></div>`);$('#f-save').onclick=()=>{const name=$('#f-name').value.trim(),kcal=+$('#f-kcal').value;if(!name||!kcal)return toast('Add a name and calories');data.nutrition.push({id:uid(),date:isoToday(),name,kcal,protein:+$('#f-protein').value||0,carbs:+$('#f-carbs').value||0,fat:+$('#f-fat').value||0,fiber:+$('#f-fiber').value||0});save();closeSheet();nutrition();toast('Food added')}}
 function profile(){const t=calcTargets(data.profile);shell(`${header()}<h1 class="page-title">Profile</h1><section class="section"><article class="card profile-hero"><div class="avatar">${escapeHtml(data.profile.name.slice(0,1).toUpperCase())}</div><div><h2>${escapeHtml(data.profile.name)}</h2><p>${goalLabel(data.profile.goal)} · ${data.profile.autoTargets!==false?'Automatic targets':'Manual targets'}</p></div></article></section><section class="section"><p class="eyebrow">Your goal</p><article class="card goal-summary"><div><span>Goal</span><strong>${goalLabel(data.profile.goal)}</strong></div><div><span>Estimated maintenance</span><strong>~${t.maintenance.toLocaleString()} kcal</strong></div><div><span>Daily target</span><strong>${data.profile.calorieTarget.toLocaleString()} kcal</strong></div><div><span>Protein</span><strong>${data.profile.proteinTarget} g</strong></div></article><p class="science-note">Targets are estimates based on your profile and activity. Adjust using your real weight trend over several weeks.</p></section><section class="section"><p class="eyebrow">Settings</p><article class="card" style="padding:0 14px"><button class="settings-row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;text-align:left" id="edit-profile"><span>Profile, activity & goal</span><small>›</small></button><button class="settings-row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;text-align:left" id="open-nutrition"><span>Nutrition</span><small>${data.profile.calorieTarget} kcal ›</small></button><button class="settings-row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;text-align:left" id="notification-settings"><span>Notifications</span><small>GAYM sass ›</small></button><button class="settings-row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;text-align:left" id="export-data"><span>Export data</span><small>JSON ›</small></button><button class="settings-row" style="width:100%;background:none;border:0;color:inherit;text-align:left" id="show-welcome"><span>Show welcome screen</span><small>›</small></button></article></section><section class="section"><p class="eyebrow">App</p><article class="card" style="padding:14px"><p class="subtle" style="margin:0">Mobile-first · strength + cardio + rehab · local autosave.</p></article></section>`);$('#edit-profile').onclick=openProfileSheet;$('#open-nutrition').onclick=()=>go('nutrition');$('#notification-settings').onclick=openNotificationSettings;$('#export-data').onclick=exportData;$('#show-welcome').onclick=()=>{entryUnlocked=false;entry()};}
 
@@ -698,6 +936,6 @@ function closeSheet(){
  $('#sheet-root').innerHTML='';document.documentElement.classList.remove('sheet-open');document.body.classList.remove('sheet-open');document.documentElement.style.removeProperty('--visual-viewport-height');document.documentElement.style.removeProperty('--visual-viewport-top');
  requestAnimationFrame(()=>window.scrollTo({top:sheetPageScroll,left:0,behavior:'auto'}));
 }
-function render(){evaluateNotifications();clearInterval(cardioTimer);if(!entryUnlocked)return entry();if(route==='home')home();else if(route==='plan')plan();else if(route==='workout')workout();else if(route==='active')active();else if(route==='progress')progress();else if(route==='nutrition')nutrition();else if(route==='profile')profile();else home();}
-migrateProfile();save();if('scrollRestoration'in history)history.scrollRestoration='manual';window.addEventListener('beforeunload',save);if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));render();
+function render(){evaluateNotifications();clearInterval(cardioTimer);stopWorkoutClock();if(!entryUnlocked)return entry();if(route==='home')home();else if(route==='plan')plan();else if(route==='workout')workout();else if(route==='active')active();else if(route==='progress')progress();else if(route==='nutrition')nutrition();else if(route==='profile')profile();else home();}
+migrateProfile();save();if('scrollRestoration'in history)history.scrollRestoration='manual';window.addEventListener('beforeunload',persistActiveSession);window.addEventListener('pagehide',persistActiveSession);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistActiveSession();else if(route==='active'&&data.activeSession)render()});if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));render();
 })();
