@@ -254,6 +254,106 @@ function todaysNutritionStatus(){
  const foods=(data.nutrition||[]).filter(n=>n.date===isoToday()),kcal=foods.reduce((a,n)=>a+(+n.kcal||0),0),protein=foods.reduce((a,n)=>a+(+n.protein||0),0);
  return {kcal,protein,kcalRatio:data.profile.calorieTarget?kcal/data.profile.calorieTarget:0,proteinRatio:data.profile.proteinTarget?protein/data.profile.proteinTarget:0}
 }
+
+const GAYM_VOICE={
+ active:[
+  "Workout in progress. Stop flirting with the home screen.",
+  "You started it. Now finish it, gorgeous.",
+  "The weights are waiting. Unlike your situationship, they are consistent.",
+  "Less refreshing. More lifting."
+ ],
+ pr:[
+  "A personal best? Unfortunately this will affect your personality.",
+  "New PB. Be humble about it for at least eleven seconds.",
+  "Stronger than last time. Your old numbers have been asked to leave.",
+  "New PB. Screenshot it before your ego rewrites history.",
+  "The weight went up. So did the audacity."
+ ],
+ multi:[
+  "Two sessions today. Completely normal behavior.",
+  "Double session energy. Subtlety has left the building.",
+  "Apparently one workout was merely an opening act.",
+  "Multiple workouts today. Your recovery has requested legal counsel."
+ ],
+ trained:[
+  "Workout done. The pump is temporary. The evidence is saved.",
+  "Training complete. Go stand suspiciously close to a mirror.",
+  "The work has been done. You may now become unbearable.",
+  "Weights moved. Ego nourished. Excellent.",
+  "Back again? Checking if the jockstraps fit differently yet?"
+ ],
+ fed:[
+  "Trained and fed. Annoyingly responsible.",
+  "Workout logged and nutrition handled. Who authorized this competence?",
+  "Protein handled. Training handled. Diva behavior, administratively flawless.",
+  "Fed, trained, dangerous. Carry on."
+ ],
+ rest:[
+  "Rest day. Even divas require maintenance.",
+  "Recover today. Cause problems tomorrow.",
+  "Muscles grow during recovery. Tragically, lying down is productive.",
+  "Today we lift nothing but standards."
+ ],
+ gap:[
+  "The dumbbells have filed a missing person report.",
+  "Your gym membership would like to know if this is still a relationship.",
+  "The weights remember you. Awkward.",
+  "Absence makes the heart grow fonder. It does very little for progressive overload."
+ ],
+ streak:[
+  "Consistency? In this community? Historic.",
+  "That streak is becoming a personality trait.",
+  "Discipline looks suspiciously good on you.",
+  "Another day on the streak. The gym should consider charging rent."
+ ],
+ morning:[
+  "Good morning, gorgeous. Go give someone a reason to stare.",
+  "Morning, babe. Coffee first, then shoulders with opinions.",
+  "Rise and train. The tank tops are counting on you.",
+  "Good morning. Your delts have appointments."
+ ],
+ afternoon:[
+  "Afternoon, gorgeous. Plenty of daylight left to become inconveniently attractive.",
+  "The day is half gone. Your pump does not have to be.",
+  "Afternoon check. Move something heavy, then act casual.",
+  "Still time to make today's shirt fit differently."
+ ],
+ evening:[
+  "Evening plans? Apparently becoming hotter counts.",
+  "Finish the day strong. The mirror can debrief you later.",
+  "Prime time for weights and questionable confidence.",
+  "The sun is going down. Your standards remain offensively high."
+ ],
+ late:[
+  "It is late. Put the phone down and let the ass regenerate.",
+  "Still awake? Recovery is part of the plot.",
+  "Bedtime, gorgeous. Muscles cannot grow on screen time alone.",
+  "The gym will still exist tomorrow. Your sleep schedule may not."
+ ],
+ beginner:[
+  "Technique first. Main character arc later.",
+  "Light weight, clean reps. We are building lore.",
+  "No ego required. Suspiciously mature behavior.",
+  "Learn the movement first. The dramatic weights can arrive later."
+ ],
+ exerciseDone:[
+  "She survived.",
+  "Exercise done. Gorgeous.",
+  "One less thing between you and the pump.",
+  "Handled. Next.",
+  "Clean work. Try not to make it your whole personality."
+ ],
+ extraSet:[
+  "Another set? Okay babe, we get it.",
+  "Bonus set. Somebody wants attention.",
+  "One more set has entered the chat."
+ ]
+};
+function voicePick(pool,key=''){
+ if(!pool?.length)return '';
+ const seed=String(key||isoToday()).split('').reduce((a,c)=>((a*31)+c.charCodeAt(0))>>>0,7);
+ return pool[seed%pool.length];
+}
 const UNICORN_STATES={
  default:{key:'default',label:'GLITTER READY',image:'assets/unicorns_v34/unicorn_default.webp'},
  newWorkout:{key:'new-workout',label:'READY TO TRAIN',image:'assets/unicorns_v34/unicorn_new_workout.webp'},
@@ -273,34 +373,35 @@ const UNICORN_STATES={
 };
 function unicornWithSass(base,sass){return {...base,sass}}
 function unicornState(){
- const st=todayState(),nut=st.nutrition;
- if(st.active)return unicornWithSass(UNICORN_STATES.pump,'Good. You showed up. Don’t get comfortable.');
- if(st.pr){const exercise=st.pr.exercise||st.pr.name?` ${st.pr.exercise||st.pr.name}`:'',weight=st.pr.weight?` ${st.pr.weight} kg${st.pr.reps?` × ${st.pr.reps}`:''}.`:'';return unicornWithSass(UNICORN_STATES.pr,`NEW PB${exercise}!${weight} Your ego has earned five minutes.`)}
+ const st=todayState(),nut=st.nutrition,night=nightOutState();
+ if(night&&night.date===isoToday())return unicornWithSass(UNICORN_STATES.evening,night.partyLine||"Night Out active. The macros have entered witness protection.");
+ if(st.active)return unicornWithSass(UNICORN_STATES.pump,voicePick(st.active.beginner?GAYM_VOICE.beginner:GAYM_VOICE.active,`active-${st.active.id}-${isoToday()}`));
+ if(st.pr){const exercise=st.pr.exercise||st.pr.name||'that lift',weight=st.pr.weight?` ${st.pr.weight} kg${st.pr.reps?` × ${st.pr.reps}`:''}.`:'';return unicornWithSass(UNICORN_STATES.pr,`NEW PB · ${exercise}!${weight} ${voicePick(GAYM_VOICE.pr,`pr-${exercise}-${st.pr.weight}-${st.pr.reps}`)}`)}
  if(st.sessions.length>1){
   const cardio=st.sessions.filter(s=>s.type==='cardio').length,strength=st.sessions.length-cardio;
   const mix=cardio&&strength?`${strength} strength + ${cardio} cardio`:`${st.sessions.length} workouts`;
-  return unicornWithSass(UNICORN_STATES.pump,`${mix} today. Apparently one session was not dramatic enough.`);
+  return unicornWithSass(UNICORN_STATES.pump,`${mix} today. ${voicePick(GAYM_VOICE.multi,`multi-${isoToday()}-${st.sessions.length}`)}`);
  }
  if(st.session){
   if(st.pendingPlanned)return unicornWithSass(UNICORN_STATES.newWorkout,`${st.session.name} logged. ${st.pendingPlanned.name||'Your planned workout'} is still waiting.`);
-  if(nut.kcalRatio>=.72&&nut.proteinRatio>=.72)return unicornWithSass(UNICORN_STATES.fed,'Trained and fed. Annoyingly responsible.');
-  return unicornWithSass(UNICORN_STATES.pump,'Workout done. The pump is temporary. The evidence is saved.');
+  if(nut.kcalRatio>=.72&&nut.proteinRatio>=.72)return unicornWithSass(UNICORN_STATES.fed,voicePick(GAYM_VOICE.fed,`fed-${isoToday()}`));
+  return unicornWithSass(UNICORN_STATES.pump,voicePick(GAYM_VOICE.trained,`trained-${isoToday()}-${st.session.id}`));
  }
- if(st.rest)return unicornWithSass(UNICORN_STATES.rest,'Rest is part of the plan. Recover today, cause problems tomorrow.');
- if(st.gap!==null&&st.gap>=4)return unicornWithSass(UNICORN_STATES.judging,`${st.gap} days without training. The dumbbells have filed a missing person report.`);
+ if(st.rest)return unicornWithSass(UNICORN_STATES.rest,voicePick(GAYM_VOICE.rest,`rest-${isoToday()}`));
+ if(st.gap!==null&&st.gap>=4)return unicornWithSass(UNICORN_STATES.judging,`${st.gap} days without training. ${voicePick(GAYM_VOICE.gap,`gap-${isoToday()}`)}`);
  const nutritionCheck=notificationTimeReached(notificationSettings().nutritionTime||'19:00');
  if(nutritionCheck){const kcalLeft=Math.max(0,Math.round((data.profile.calorieTarget||0)-nut.kcal)),proteinLeft=Math.max(0,Math.round((data.profile.proteinTarget||0)-nut.protein));if(nut.kcalRatio<.70&&nut.proteinRatio<.70)return unicornWithSass(UNICORN_STATES.hungry,`${kcalLeft} kcal and ${proteinLeft} g protein left. Go eat.`);if(nut.kcalRatio<.70&&nut.proteinRatio>=.70)return unicornWithSass(UNICORN_STATES.calories,`${kcalLeft} kcal left. Protein survived. Your calories did not.`);if(nut.proteinRatio<.70&&nut.kcalRatio>=.70)return unicornWithSass(UNICORN_STATES.protein,`${proteinLeft} g protein left. That number is looking tragic.`)}
- if(st.streak>=3)return unicornWithSass(UNICORN_STATES.streak,`${st.streak} day streak. Discipline looks good on you.`);
+ if(st.streak>=3)return unicornWithSass(UNICORN_STATES.streak,`${st.streak} day streak. ${voicePick(GAYM_VOICE.streak,`streak-${isoToday()}`)}`);
  if(st.planned&&!st.rest)return unicornWithSass(UNICORN_STATES.newWorkout,`${st.planned.name||'Workout'} is waiting. You know what to do.`);
- if(st.hour>=22||st.hour<5)return unicornWithSass(UNICORN_STATES.late,'Still awake? Legends recover too. Go to bed.');
- if(st.hour<10)return unicornWithSass(UNICORN_STATES.morning,'Good morning, gorgeous. Go give someone a reason to stare.');
- if(st.hour<17)return unicornWithSass(UNICORN_STATES.afternoon,'Afternoon check. Plenty of day left to get it done.');
- return unicornWithSass(UNICORN_STATES.evening,'Finish strong. Close the day like a beast.');
+ if(st.hour>=22||st.hour<5)return unicornWithSass(UNICORN_STATES.late,voicePick(GAYM_VOICE.late,`late-${isoToday()}`));
+ if(st.hour<10)return unicornWithSass(UNICORN_STATES.morning,voicePick(GAYM_VOICE.morning,`morning-${isoToday()}`));
+ if(st.hour<17)return unicornWithSass(UNICORN_STATES.afternoon,voicePick(GAYM_VOICE.afternoon,`afternoon-${isoToday()}`));
+ return unicornWithSass(UNICORN_STATES.evening,voicePick(GAYM_VOICE.evening,`evening-${isoToday()}`));
 }
 function unicornMood(){const u=unicornState();return {mood:u.key,label:u.label,image:u.image,sass:u.sass}}
 function renderHomeUnicorn(){
  const u=unicornState();
- return `<div class="hero-art ${u.key}" aria-hidden="true"><div class="hero-mascot-row"><div class="hero-mascot-ring"><img class="hero-mascot" src="${u.image}" alt=""><span class="mascot-sparkle mascot-sparkle-a">✦</span><span class="mascot-sparkle mascot-sparkle-b">✧</span></div><div class="unicorn-speech">${escapeHtml(u.sass)}</div></div><span class="mascot-state-label">${escapeHtml(u.label)}</span></div>`;
+ const night=nightOutState(),party=night&&night.date===isoToday();return `<div class="hero-art ${u.key} ${party?'party-active':''}" aria-hidden="true"><div class="hero-mascot-row"><div class="hero-mascot-ring"><img class="hero-mascot" src="${u.image}" alt=""><span class="mascot-sparkle mascot-sparkle-a">✦</span><span class="mascot-sparkle mascot-sparkle-b">✧</span></div><div class="unicorn-speech">${escapeHtml(u.sass)}</div></div><span class="mascot-state-label">${escapeHtml(u.label)}</span></div>`;
 }
 function weekDays(offset=0){let start=new Date();start.setHours(12,0,0,0);start.setDate(start.getDate()-((start.getDay()+6)%7)+(offset*7));return Array.from({length:7},(_,i)=>{let d=new Date(start);d.setDate(start.getDate()+i);return d})}
 let planWeekOffset=0;
@@ -877,19 +978,57 @@ const BEGINNER_PROGRAMS={
  gym:{name:'Beginner Gym Full Body',tag:'GYM',description:'Simple machines + basic movement patterns · about 40 min',items:['leg-press','chest-press-machine','lat-pulldown','leg-curl','lateral-raise']}
 };
 function beginnerItem(key){const g=BEGINNER_EXERCISES[key];return g?{name:g.name,muscle:g.muscle,equipment:g.equipment,sets:g.sets,reps:g.reps,beginnerGuideKey:key}:null}
+
+const BEGINNER_EQUIPMENT_RULES={
+ 'barbell-back-squat':['barbell'],
+ 'goblet-squat':['dumbbells'],
+ 'dumbbell-squat':['dumbbells'],
+ 'bulgarian-split-squat':[],
+ 'reverse-lunge':[],
+ 'barbell-rdl':['barbell'],
+ 'dumbbell-rdl':['dumbbells'],
+ 'glute-bridge':['mat'],
+ 'dumbbell-floor-press':['dumbbells','mat'],
+ 'push-up':[],
+ 'one-arm-db-row':['dumbbells'],
+ 'two-arm-db-row':['dumbbells'],
+ 'barbell-row':['barbell'],
+ 'dumbbell-shoulder-press':['dumbbells'],
+ 'lateral-raise':['dumbbells'],
+ 'dumbbell-curl':['dumbbells'],
+ 'hammer-curl':['dumbbells'],
+ 'dead-hang':['pullup'],
+ 'scapular-pull-up':['pullup'],
+ 'negative-pull-up':['pullup'],
+ 'assisted-pull-up':['pullup','bands'],
+ 'pull-up-beginner':['pullup'],
+ 'dumbbell-bench-press':['dumbbells','bench'],
+ 'chest-supported-db-row-home':['dumbbells','bench'],
+ 'step-up':['bench'],
+ 'band-row':['bands'],
+ 'band-face-pull':['bands'],
+ 'band-pulldown':['bands'],
+ 'leg-press':['gym'],
+ 'chest-press-machine':['gym'],
+ 'lat-pulldown':['gym'],
+ 'leg-curl':['gym']
+};
+function beginnerEquipmentRequirements(key){return BEGINNER_EQUIPMENT_RULES[key]||[]}
 function currentBeginnerEquipment(){return Array.isArray(data.beginnerEquipment)&&data.beginnerEquipment.length?data.beginnerEquipment:['dumbbells','barbell','mat']}
 function beginnerEquipmentSupports(key){
- const g=BEGINNER_EXERCISES[key];if(!g)return false;
- const e=g.equipment.toLowerCase(),have=currentBeginnerEquipment();
- // Home means exactly the equipment selected here. Gym machines/cables do not silently count as home equipment.
- if(/machine|cable/.test(e))return false;
- if(e.includes('pull-up')&&!have.includes('pullup'))return false;
- if(e.includes('band')&&!have.includes('bands'))return false;
- if(e.includes('bench')&&!have.includes('bench'))return false;
- if(e.includes('barbell')&&!have.includes('barbell'))return false;
- if(e.includes('dumbbell')&&!have.includes('dumbbells'))return false;
- if(e.includes('mat')&&!have.includes('mat'))return false;
- return true;
+ if(!BEGINNER_EXERCISES[key])return false;
+ const req=beginnerEquipmentRequirements(key),have=currentBeginnerEquipment();
+ if(req.includes('gym'))return false;
+ return req.every(x=>have.includes(x));
+}
+
+function beginnerExercisesUnlockedBy(equipment){
+ const have=new Set(currentBeginnerEquipment());
+ if(have.has(equipment))return [];
+ const simulated=[...have,equipment];
+ return Object.entries(BEGINNER_EXERCISES)
+  .filter(([key])=>{const req=beginnerEquipmentRequirements(key);return !req.includes('gym')&&req.length&&req.every(x=>simulated.includes(x))&&!req.every(x=>have.has(x))})
+  .map(([key,g])=>({key,...g}));
 }
 function beginnerAvailableHomeExercises(){
  return Object.entries(BEGINNER_EXERCISES)
@@ -912,20 +1051,52 @@ function beginnerHomeChoice(key,seen=new Set()){
 }
 function openBeginnerEquipment(){
  const options=[['dumbbells','Dumbbells'],['barbell','Barbell + plates'],['mat','Exercise mat'],['bench','Bench'],['bands','Resistance bands'],['pullup','Pull-up bar']],selected=new Set(currentBeginnerEquipment());
- openSheet(`<div class="sheet-head"><div><p class="eyebrow">Home setup</p><h2>What do you have?</h2></div><button class="sheet-close" data-close>×</button></div><p class="subtle">GAYM uses this only to choose sensible home alternatives. You can change it whenever your setup changes.</p><div class="beginner-equipment-list">${options.map(([id,label])=>`<label><input type="checkbox" value="${id}" ${selected.has(id)?'checked':''}><span>${label}</span></label>`).join('')}</div><button class="primary" id="save-beginner-equipment">SAVE HOME SETUP</button>`);
+ openSheet(`<div class="sheet-head"><div><p class="eyebrow">Home setup</p><h2>What do you have?</h2></div><button class="sheet-close" data-close>×</button></div><p class="subtle">This controls Home workouts and “Available with your setup”. Beginner Gym is intentionally separate because gym equipment is not your home setup.</p><div class="beginner-equipment-list">${options.map(([id,label])=>{const adds=selected.has(id)?0:beginnerExercisesUnlockedBy(id).length;return `<label><input type="checkbox" value="${id}" ${selected.has(id)?'checked':''}><span><strong>${label}</strong><small>${selected.has(id)?'Currently available':adds?`Adds ${adds} exercise${adds===1?'':'s'}`:'Optional equipment'}</small></span></label>`}).join('')}</div><button class="primary" id="save-beginner-equipment">SAVE HOME SETUP</button>`);
  $('#save-beginner-equipment').onclick=()=>{const before=new Set(beginnerAvailableHomeExercises().map(x=>x.key)),picked=$$('.beginner-equipment-list input:checked').map(x=>x.value);if(!picked.length)return toast('Choose at least one thing you can train with');data.beginnerEquipment=picked;const after=beginnerAvailableHomeExercises(),unlocked=after.filter(x=>!before.has(x.key));save();closeSheet();beginnerWorkout();toast(unlocked.length?`${unlocked.length} new beginner exercise${unlocked.length===1?'':'s'} available`:'Home setup updated')};
+}
+
+const BEGINNER_HOME_SLOTS={
+ homeA:[
+  {role:'squat',preferred:['barbell-back-squat','goblet-squat','dumbbell-squat','reverse-lunge']},
+  {role:'horizontal press',preferred:['dumbbell-bench-press','dumbbell-floor-press','push-up']},
+  {role:'row/pull',preferred:['chest-supported-db-row-home','one-arm-db-row','band-row','barbell-row']},
+  {role:'hinge',preferred:['barbell-rdl','dumbbell-rdl','glute-bridge']},
+  {role:'shoulders',preferred:['lateral-raise','dumbbell-shoulder-press','band-face-pull']}
+ ],
+ homeB:[
+  {role:'single-leg',preferred:['bulgarian-split-squat','step-up','reverse-lunge','goblet-squat']},
+  {role:'vertical press',preferred:['dumbbell-shoulder-press','push-up','dumbbell-floor-press']},
+  {role:'vertical pull / row',preferred:['assisted-pull-up','negative-pull-up','pull-up-beginner','scapular-pull-up','band-pulldown','barbell-row','one-arm-db-row']},
+  {role:'glutes / hinge',preferred:['glute-bridge','dumbbell-rdl','barbell-rdl']},
+  {role:'arms',preferred:['hammer-curl','dumbbell-curl','band-row']}
+ ]
+};
+function resolvedBeginnerHomeProgram(key){
+ const slots=BEGINNER_HOME_SLOTS[key]||[];
+ const used=new Set();
+ return slots.map(slot=>{
+  const picked=slot.preferred.find(ex=>!used.has(ex)&&beginnerEquipmentSupports(ex));
+  const fallback=picked||slot.preferred.find(ex=>beginnerEquipmentSupports(ex))||beginnerHomeChoice(slot.preferred[0]);
+  if(fallback)used.add(fallback);
+  return fallback;
+ }).filter(Boolean);
+}
+function beginnerHomeSwapNote(original,resolved){
+ if(original===resolved)return '';
+ const from=BEGINNER_EXERCISES[original]?.name||original,to=BEGINNER_EXERCISES[resolved]?.name||resolved;
+ return `${from} → ${to}`;
 }
 function startBeginnerProgram(key){
  const p=BEGINNER_PROGRAMS[key];if(!p)return;
- const keys=key.startsWith('home')?p.items.map(beginnerHomeChoice):p.items;
+ const keys=key.startsWith('home')?resolvedBeginnerHomeProgram(key):p.items;
  startWorkoutTemplate({id:`beginner-${key}`,name:p.name,type:'strength',program:'Beginner',programDay:key,beginner:true,notes:'Beginner guided workout',items:keys.map(beginnerItem).filter(Boolean)});
 }
 function beginnerWorkout(){
  shell(`${header()}<h1 class="page-title">Workout</h1><div class="tabs workout-mode-tabs"><button class="tab" id="beginner-back">MY TRAINING</button><button class="tab active">BEGINNER</button></div>
  <section class="beginner-hero"><span class="eyebrow">START HERE</span><h2>New to strength training?</h2><p>GAYM will explain the words, the setup and what each exercise is supposed to train. You still use the normal workout logger underneath.</p><button class="primary" id="beginner-basics">TEACH ME THE BASICS</button></section>
- <section class="section"><div class="section-head"><div><p class="eyebrow">Home workouts</p><h2>Built for your setup</h2></div><button class="text-btn" id="beginner-equipment">HOME SETUP</button></div><div class="beginner-setup-summary"><span>${currentBeginnerEquipment().map(x=>x==='dumbbells'?'Dumbbells':x==='barbell'?'Barbell':x==='mat'?'Mat':x==='pullup'?'Pull-up bar':x[0].toUpperCase()+x.slice(1)).join(' · ')}</span><b>3 DAYS / WEEK</b></div><p class="subtle">Alternate A and B: week 1 A · B · A, week 2 B · A · B. If your equipment is missing, GAYM swaps to a suitable alternative when the workout starts.</p><div class="beginner-program-grid">${['homeA','homeB'].map(k=>{const p=BEGINNER_PROGRAMS[k],resolved=p.items.map(beginnerHomeChoice);return `<article class="card beginner-program-card"><span class="eyebrow">${p.tag}</span><h3>${p.name}</h3><p>${p.description}</p><div class="beginner-ex-list">${resolved.map((x,i)=>`<button type="button" data-beginner-guide="${x}"><span>${i+1}</span><span><strong>${escapeHtml(BEGINNER_EXERCISES[x].name)}</strong><small><b class="beginner-friendly-inline">BEGINNER FRIENDLY</b> · ${escapeHtml(BEGINNER_EXERCISES[x].sets+' × '+BEGINNER_EXERCISES[x].reps)}</small></span><span class="chev">›</span></button>`).join('')}</div><button class="primary" data-start-beginner="${k}">START ${k==='homeA'?'A':'B'}</button></article>`}).join('')}</div></section>
- <section class="section"><div class="section-head"><div><p class="eyebrow">Your home exercise library</p><h2>Available with your setup</h2></div><span class="beginner-pill">${beginnerAvailableHomeExercises().length} EXERCISES</span></div><p class="subtle">This changes with Home Setup. These same exercises are also available in normal Custom Workouts.</p><div class="beginner-available-grid">${beginnerAvailableHomeExercises().map(g=>`<button type="button" class="beginner-available-card" data-beginner-guide="${g.key}"><span class="beginner-friendly-badge">BEGINNER FRIENDLY</span><strong>${escapeHtml(g.name)}</strong><small>${escapeHtml(g.muscle)} · ${escapeHtml(g.equipment)}</small><span class="chev">›</span></button>`).join('')}</div></section>
- <section class="section"><div class="section-head"><div><p class="eyebrow">Beginner gym</p><h2>Keep it simple</h2></div><span class="beginner-pill">FULL BODY</span></div><article class="card beginner-program-card"><span class="eyebrow">GYM</span><h3>${BEGINNER_PROGRAMS.gym.name}</h3><p>${BEGINNER_PROGRAMS.gym.description}</p><div class="beginner-ex-list">${BEGINNER_PROGRAMS.gym.items.map((x,i)=>`<button type="button" data-beginner-guide="${x}"><span>${i+1}</span><span><strong>${escapeHtml(BEGINNER_EXERCISES[x].name)}</strong><small><b class="beginner-friendly-inline">BEGINNER FRIENDLY</b> · ${escapeHtml(BEGINNER_EXERCISES[x].sets+' × '+BEGINNER_EXERCISES[x].reps)}</small></span><span class="chev">›</span></button>`).join('')}</div><button class="primary" data-start-beginner="gym">START GYM WORKOUT</button></article></section>
+ <section class="section"><div class="section-head"><div><p class="eyebrow">Home workouts</p><h2>Built for your setup</h2></div><button class="text-btn" id="beginner-equipment">HOME SETUP</button></div><div class="beginner-setup-summary"><span>${currentBeginnerEquipment().map(x=>x==='dumbbells'?'Dumbbells':x==='barbell'?'Barbell':x==='mat'?'Mat':x==='pullup'?'Pull-up bar':x[0].toUpperCase()+x.slice(1)).join(' · ')}</span><b>3 DAYS / WEEK</b></div><p class="subtle">Alternate A and B: week 1 A · B · A, week 2 B · A · B. If your equipment is missing, GAYM swaps to a suitable alternative when the workout starts.</p><div class="beginner-program-grid">${['homeA','homeB'].map(k=>{const p=BEGINNER_PROGRAMS[k],resolved=resolvedBeginnerHomeProgram(k);return `<article class="card beginner-program-card"><span class="eyebrow">${p.tag}</span><h3>${p.name}</h3><p>${p.description}</p><div class="beginner-ex-list">${resolved.map((x,i)=>`<button type="button" data-beginner-guide="${x}"><span>${i+1}</span><span><strong>${escapeHtml(BEGINNER_EXERCISES[x].name)}</strong><small><b class="beginner-friendly-inline">BEGINNER FRIENDLY</b> · ${escapeHtml(BEGINNER_EXERCISES[x].sets+' × '+BEGINNER_EXERCISES[x].reps)}</small></span><span class="chev">›</span></button>`).join('')}</div><div class="beginner-dynamic-note"><span>BUILT FROM YOUR HOME SETUP</span><small>Change equipment and this plan changes with it.</small></div><button class="primary" data-start-beginner="${k}">START ${k==='homeA'?'A':'B'}</button></article>`}).join('')}</div></section>
+ <section class="section"><div class="section-head"><div><p class="eyebrow">Your home exercise library</p><h2>Available with your setup</h2></div><span class="beginner-pill">${beginnerAvailableHomeExercises().length} EXERCISES</span></div><p class="subtle">Only exercises your current Home Setup supports appear here. Normal Custom Workouts still keep the full library for gym days, travel and one-off sessions.</p><div class="beginner-available-grid">${beginnerAvailableHomeExercises().map(g=>`<button type="button" class="beginner-available-card" data-beginner-guide="${g.key}"><span class="beginner-friendly-badge">BEGINNER FRIENDLY</span><strong>${escapeHtml(g.name)}</strong><small>${escapeHtml(g.muscle)} · ${escapeHtml(g.equipment)}</small><span class="chev">›</span></button>`).join('')}</div></section>
+ <section class="section"><div class="section-head"><div><p class="eyebrow">Beginner gym</p><h2>Keep it simple</h2></div><span class="beginner-pill">GYM EQUIPMENT</span></div><p class="subtle">This program assumes you are at a gym, so Home Setup does not filter these machine exercises.</p><article class="card beginner-program-card"><span class="eyebrow">GYM</span><h3>${BEGINNER_PROGRAMS.gym.name}</h3><p>${BEGINNER_PROGRAMS.gym.description}</p><div class="beginner-ex-list">${BEGINNER_PROGRAMS.gym.items.map((x,i)=>`<button type="button" data-beginner-guide="${x}"><span>${i+1}</span><span><strong>${escapeHtml(BEGINNER_EXERCISES[x].name)}</strong><small><b class="beginner-friendly-inline">BEGINNER FRIENDLY</b> · ${escapeHtml(BEGINNER_EXERCISES[x].sets+' × '+BEGINNER_EXERCISES[x].reps)}</small></span><span class="chev">›</span></button>`).join('')}</div><button class="primary" data-start-beginner="gym">START GYM WORKOUT</button></article></section>
  <section class="section"><article class="card beginner-note"><span class="eyebrow">THE RULE</span><strong>Technique first. Weight second.</strong><p>If you cannot control the movement, make it lighter or use an easier alternative. The goal is to learn, not impress the furniture.</p></article></section>`);
  $('#beginner-back').onclick=workout;$('#beginner-basics').onclick=openBeginnerBasics;$('#beginner-equipment').onclick=openBeginnerEquipment;
  $$('[data-start-beginner]').forEach(b=>b.onclick=()=>startBeginnerProgram(b.dataset.startBeginner));
@@ -1378,7 +1549,7 @@ function bottomUnicorn(result){
 }
 function bottomResultMarkup(result){
  const cls=result.level==='good'?'good':result.level==='maybe'?'maybe':'wait',u=bottomUnicorn(result);
- return `<section class="bottom-result ${cls}"><p class="eyebrow">BOTTOM CHECK</p><h2><span>🍑</span> ${escapeHtml(result.title)}</h2><p>${escapeHtml(result.subtitle)}</p><div class="bottom-result-list">${result.checks.map(x=>`<div class="${x.neutral?'neutral':x.ok?'ok':'flag'}"><span>${x.neutral?'·':x.ok?'✓':'!'}</span><strong>${escapeHtml(x.text)}</strong></div>`).join('')}</div><button class="text-btn" id="bottom-why">WHY?</button></section><aside class="bottom-unicorn-card"><img src="${u.image}" alt=""><div><span>${escapeHtml(u.label)}</span><p>${escapeHtml(u.text)}</p></div></aside>`;
+ return `<section class="bottom-result ${cls} bottom-result-reveal"><p class="eyebrow">BOTTOM CHECK</p><h2><span>🍑</span> ${escapeHtml(result.title)}</h2><p>${escapeHtml(result.subtitle)}</p><div class="bottom-result-list">${result.checks.map(x=>`<div class="${x.neutral?'neutral':x.ok?'ok':'flag'}"><span>${x.neutral?'·':x.ok?'✓':'!'}</span><strong>${escapeHtml(x.text)}</strong></div>`).join('')}</div><button class="text-btn" id="bottom-why">WHY?</button></section><aside class="bottom-unicorn-card"><img src="${u.image}" alt=""><div><span>${escapeHtml(u.label)}</span><p>${escapeHtml(u.text)}</p></div></aside>`;
 }
 function openBottomCheck(){
  const existing=latestBottomCheckin(),result=existing?bottomAssessment(existing):null;
@@ -1460,8 +1631,8 @@ function active(){
   if(button.dataset.howto!==undefined){const i=+button.dataset.howto,key=s.items[i]?.beginnerGuideKey;if(key)openBeginnerGuide(key,i);return}
   if(button.dataset.activeAction==='finish'){button.disabled=true;button.textContent='FINISHING…';finishSession();return}
   if(button.dataset.activeAction==='add-exercise'){openExercisePicker(s.type,ex=>{const rx=defaultExercisePrescription(ex,s.type);s.items.push({name:ex.name,muscle:ex.muscle||'',equipment:ex.equipment||'',targetReps:rx.reps,beginnerGuideKey:ex.beginnerGuideKey||'',note:'',sets:Array.from({length:rx.sets},()=>({weight:'',reps:'',done:false}))});save();active()});return}
-  if(button.dataset.check){const[i,j]=button.dataset.check.split(':').map(Number),set=s.items[i]?.sets?.[j];if(set){activeExerciseOpen=i;set.done=!set.done;save();button.classList.toggle('done',set.done);button.textContent=set.done?'✓':'○';button.setAttribute('aria-pressed',set.done?'true':'false');button.closest('.set-row')?.classList.toggle('set-done',set.done);updateActiveProgressUI(s)}return}
-  if(button.dataset.addset!==undefined){const i=+button.dataset.addset;if(s.items[i]){activeExerciseOpen=i;s.items[i].sets.push({weight:'',reps:'',done:false});save();active()}return}
+  if(button.dataset.check){const[i,j]=button.dataset.check.split(':').map(Number),item=s.items[i],set=item?.sets?.[j];if(set){activeExerciseOpen=i;const wasDone=set.done;set.done=!set.done;save();button.classList.toggle('done',set.done);button.textContent=set.done?'✓':'○';button.setAttribute('aria-pressed',set.done?'true':'false');const row=button.closest('.set-row');row?.classList.toggle('set-done',set.done);if(set.done&&!wasDone){button.classList.remove('set-pop');void button.offsetWidth;button.classList.add('set-pop');const allDone=(item.sets||[]).length&&(item.sets||[]).every(x=>x.done);if(allDone){const card=button.closest('.exercise-card');card?.classList.add('exercise-complete-flash');setTimeout(()=>card?.classList.remove('exercise-complete-flash'),850);toast(voicePick(GAYM_VOICE.exerciseDone,`${s.id}-${i}-${Date.now()}`))}}updateActiveProgressUI(s)}return}
+  if(button.dataset.addset!==undefined){const i=+button.dataset.addset;if(s.items[i]){activeExerciseOpen=i;s.items[i].sets.push({weight:'',reps:'',done:false});const count=s.items[i].sets.length;save();active();if(count>=6)setTimeout(()=>toast(voicePick(GAYM_VOICE.extraSet,`${s.id}-${i}-${count}`)),120)}return}
   if(button.dataset.removeset!==undefined){const i=+button.dataset.removeset,x=s.items[i];if(x&&x.sets.length>1){activeExerciseOpen=i;const removed=x.sets.pop();save();active();actionToast('Set removed','UNDO',()=>{if(data.activeSession?.id===s.id&&data.activeSession.items[i]){data.activeSession.items[i].sets.push(removed);save();active()}})}return}
   if(button.dataset.removeexercise!==undefined){const i=+button.dataset.removeexercise;if(s.items.length<=1){toast('Keep at least one exercise');return}const removed=s.items.splice(i,1)[0];activeExerciseOpen=Math.max(0,Math.min(activeExerciseOpen,s.items.length-1));save();active();actionToast(`${removed.name} removed`,'UNDO',()=>{if(data.activeSession?.id===s.id){data.activeSession.items.splice(i,0,removed);save();active()}})}
  };
@@ -1472,7 +1643,7 @@ function undoFinishedSession(finished){
  if(data.activeSession||!(data.sessions||[]).some(x=>x.id===finished.id))return toast('Workout can no longer be reopened');
  data.sessions=data.sessions.filter(x=>x.id!==finished.id);const restored=structuredClone(finished);delete restored.finishedAt;delete restored.durationMin;delete restored.doneSets;delete restored.totalSets;delete restored.completed;delete restored.prs;data.activeSession=restored;recomputePRHistory({notifyNew:false});save();go('active');toast('Workout reopened');
 }
-function finalizeSession(overrides={}){const s=data.activeSession;if(!s)return;const durationMin=overrides.durationMin||sessionDurationMinutes(s);let doneSets=0,totalSets=0;if(s.type!=='cardio')s.items.forEach(x=>x.sets.forEach(z=>{totalSets++;if(z.done)doneSets++}));const comment=completionSass(s,durationMin,doneSets,totalSets);const finished={...s,...overrides,durationMin,doneSets,totalSets,finishedAt:Date.now(),completed:true};if((data.sessions||[]).some(x=>x.id===finished.id)){data.activeSession=null;save();return go('home')}data.sessions.push(finished);data.activeSession=null;recomputePRHistory({notifyNew:true});save();stopWorkoutClock();const completionText=totalSets?` · ${doneSets}/${totalSets} sets`:finished.distance?` · ${finished.distance} km`:'';const next=nextTimeSummary(finished),coachTips=sessionCoachSummary(finished);openSheet(`<div style="text-align:center;padding:8px 0"><p class="eyebrow">Workout complete</p><h2 style="font-size:30px;margin:4px 0">${escapeHtml(comment)}</h2><p class="subtle">${durationMin} min${completionText}</p>${next.length?`<div class="next-time-card"><p class="eyebrow">NEXT TIME</p>${next.map(x=>`<div><span><strong>${escapeHtml(x.name)}</strong><small>${escapeHtml(x.current)}</small></span><b>${escapeHtml(x.next)}</b></div>`).join('')}</div>`:''}<div class="post-coach-insights"><p class="eyebrow">GAYM COACH</p>${coachTips.map(x=>`<p>${escapeHtml(x)}</p>`).join('')}</div><div class="sheet-actions"><button class="primary" id="finish-home">BACK TO HOME</button><button class="secondary" id="finish-progress">VIEW PROGRESS</button></div></div>`);$('#finish-home').onclick=()=>{closeSheet();go('home');actionToast('Workout completed','UNDO',()=>undoFinishedSession(finished))};$('#finish-progress').onclick=()=>{closeSheet();go('progress')}}
+function finalizeSession(overrides={}){const s=data.activeSession;if(!s)return;const durationMin=overrides.durationMin||sessionDurationMinutes(s);let doneSets=0,totalSets=0;if(s.type!=='cardio')s.items.forEach(x=>x.sets.forEach(z=>{totalSets++;if(z.done)doneSets++}));const comment=completionSass(s,durationMin,doneSets,totalSets);const finished={...s,...overrides,durationMin,doneSets,totalSets,finishedAt:Date.now(),completed:true};if((data.sessions||[]).some(x=>x.id===finished.id)){data.activeSession=null;save();return go('home')}data.sessions.push(finished);data.activeSession=null;recomputePRHistory({notifyNew:true});save();stopWorkoutClock();const savedFinished=data.sessions.find(x=>x.id===finished.id)||finished,prs=savedFinished.prs||[],completionText=totalSets?` · ${doneSets}/${totalSets} sets`:savedFinished.distance?` · ${savedFinished.distance} km`:'';const next=nextTimeSummary(savedFinished),coachTips=sessionCoachSummary(savedFinished),finishLine=prs.length?voicePick(GAYM_VOICE.pr,`finish-pr-${savedFinished.id}`):comment;openSheet(`<div class="finish-celebration ${prs.length?'has-pr':''}"><div class="finish-burst" aria-hidden="true"><span>✦</span><span>✧</span><span>✦</span></div><p class="eyebrow">${prs.length?'PERSONAL BEST':'WORKOUT COMPLETE'}</p><h2>${escapeHtml(savedFinished.name||'Workout')} complete</h2><p class="finish-sass">${escapeHtml(finishLine)}</p><div class="finish-stats"><span><b>${durationMin}</b><small>MIN</small></span>${totalSets?`<span><b>${doneSets}/${totalSets}</b><small>SETS</small></span>`:''}<span><b>${(savedFinished.items||[]).length||0}</b><small>EXERCISES</small></span></div>${prs.length?`<div class="finish-pr-card"><span>NEW PB${prs.length>1?'S':''}</span>${prs.slice(0,3).map(pr=>`<div><strong>${escapeHtml(pr.name)}</strong><b>${Number(pr.weight)} kg × ${Number(pr.reps)}</b></div>`).join('')}</div>`:''}${next.length?`<div class="next-time-card"><p class="eyebrow">NEXT TIME</p>${next.map(x=>`<div><span><strong>${escapeHtml(x.name)}</strong><small>${escapeHtml(x.current)}</small></span><b>${escapeHtml(x.next)}</b></div>`).join('')}</div>`:''}<div class="post-coach-insights"><p class="eyebrow">GAYM COACH</p>${coachTips.map(x=>`<p>${escapeHtml(x)}</p>`).join('')}</div><div class="sheet-actions"><button class="primary" id="finish-home">BACK TO HOME</button><button class="secondary" id="finish-progress">VIEW PROGRESS</button></div></div>`);$('#finish-home').onclick=()=>{closeSheet();go('home');actionToast('Workout completed','UNDO',()=>undoFinishedSession(finished))};$('#finish-progress').onclick=()=>{closeSheet();go('progress')}}
 
 function exerciseLog(){
  const map=new Map();

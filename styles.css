@@ -261,3 +261,40 @@ button,input,select,textarea{font:inherit}button{color:inherit;touch-action:mani
 .beginner-available-card>.chev{grid-column:2;grid-row:1 / 4;align-self:center}
 .picker-beginner-badge{display:inline-flex;vertical-align:middle;margin-left:5px;padding:3px 5px;border:1px solid rgba(160,255,83,.25);border-radius:999px;color:var(--lime);font-size:7px;letter-spacing:.07em;font-weight:900}
 @media (min-width:680px){.beginner-available-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* v50 Personality Pass: presentation only, no new tracking/state systems. */
+@keyframes gaymSetPop{0%{transform:scale(.84)}55%{transform:scale(1.16)}100%{transform:scale(1)}}
+@keyframes gaymExerciseDone{0%{box-shadow:0 0 0 rgba(160,255,83,0)}40%{box-shadow:0 0 0 2px rgba(160,255,83,.32),0 0 28px rgba(160,255,83,.12)}100%{box-shadow:0 0 0 rgba(160,255,83,0)}}
+@keyframes gaymReveal{0%{opacity:0;transform:translateY(8px) scale(.985)}100%{opacity:1;transform:none}}
+@keyframes gaymSparkle{0%,100%{transform:translateY(0) rotate(0);opacity:.42}50%{transform:translateY(-5px) rotate(16deg);opacity:1}}
+@keyframes gaymParty{0%,100%{filter:saturate(1)}50%{filter:saturate(1.35) brightness(1.07)}}
+.set-check.set-pop,.check-btn.set-pop{animation:gaymSetPop .28s cubic-bezier(.2,.8,.3,1)}
+.exercise-card.exercise-complete-flash{animation:gaymExerciseDone .85s ease}
+.hero-art.pr .hero-mascot-ring,.finish-celebration.has-pr{animation:gaymReveal .35s ease}
+.hero-art.party-active .hero-mascot-ring{animation:gaymParty 2.4s ease-in-out infinite}
+.hero-art.party-active .mascot-sparkle{animation:gaymSparkle 1.5s ease-in-out infinite}
+.hero-art.party-active .mascot-sparkle-b{animation-delay:.45s}
+.finish-celebration{text-align:center;padding:8px 0;position:relative;overflow:hidden}
+.finish-celebration>h2{font-size:28px;line-height:1.02;margin:5px auto 7px;max-width:330px}
+.finish-sass{max-width:340px;margin:0 auto 15px;color:var(--muted);font-size:13px;line-height:1.45}
+.finish-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:14px 0}
+.finish-stats span{display:flex;min-height:64px;flex-direction:column;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:13px;background:rgba(255,255,255,.025)}
+.finish-stats b{font-size:17px}.finish-stats small{font-size:8px;letter-spacing:.1em;color:var(--muted);margin-top:3px}
+.finish-pr-card{margin:13px 0;padding:12px;border:1px solid rgba(160,255,83,.25);border-radius:14px;background:rgba(160,255,83,.055);text-align:left;animation:gaymReveal .42s ease}
+.finish-pr-card>span{display:block;color:var(--lime);font-size:9px;font-weight:900;letter-spacing:.11em;margin-bottom:8px}
+.finish-pr-card>div{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-top:1px solid rgba(255,255,255,.06)}
+.finish-pr-card>div:first-of-type{border-top:0}.finish-pr-card strong,.finish-pr-card b{font-size:12px}
+.finish-burst{height:17px;display:flex;align-items:center;justify-content:center;gap:15px;color:var(--lime);pointer-events:none}
+.finish-burst span{font-size:13px;animation:gaymSparkle 1.7s ease-in-out infinite}.finish-burst span:nth-child(2){animation-delay:.35s}.finish-burst span:nth-child(3){animation-delay:.7s}
+.bottom-result-reveal{animation:gaymReveal .32s ease}
+@media (prefers-reduced-motion:reduce){.set-check.set-pop,.check-btn.set-pop,.exercise-card.exercise-complete-flash,.hero-art.pr .hero-mascot-ring,.finish-celebration.has-pr,.hero-art.party-active .hero-mascot-ring,.hero-art.party-active .mascot-sparkle,.finish-pr-card,.bottom-result-reveal,.finish-burst span{animation:none!important}}
+
+/* v50.1 explicit beginner equipment filtering */
+.beginner-equipment-list label>span{display:flex;flex-direction:column;gap:2px}
+.beginner-equipment-list label>span strong{font-size:13px}
+.beginner-equipment-list label>span small{font-size:10px;color:var(--muted);font-weight:600}
+
+/* v50.2: Home A/B visibly resolve from the saved home equipment. */
+.beginner-dynamic-note{display:flex;justify-content:space-between;gap:10px;align-items:center;margin:8px 0 12px;padding:8px 10px;border:1px solid rgba(160,255,83,.16);border-radius:11px;background:rgba(160,255,83,.035)}
+.beginner-dynamic-note span{font-size:8px;letter-spacing:.09em;color:var(--lime);font-weight:900}
+.beginner-dynamic-note small{font-size:9px;color:var(--muted);text-align:right}
