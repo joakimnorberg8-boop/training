@@ -780,13 +780,32 @@ function showNightOutConfirm(){
  <div class="night-confirm-actions"><button class="primary" id="night-confirm-yes">YES, OBVIOUSLY</button><button class="secondary" data-close>NOT TONIGHT</button></div>`);
  const yes=$('#night-confirm-yes');if(yes)yes.onclick=activateNightOut;
 }
+
+const NIGHT_OUT_CANCEL_LINES=[
+ "Plot twist. Responsible homosexual.",
+ "Plans cancelled. Macros cautiously optimistic.",
+ "The dance floor has lost a soldier.",
+ "Character development. Disturbing, but noted.",
+ "The homosexual agenda has been postponed.",
+ "Your liver just exhaled.",
+ "Canceled? Fine. The group chat will survive.",
+ "Tonight's bad decisions have been rescheduled."
+];
+function pickNightOutCancelLine(){return NIGHT_OUT_CANCEL_LINES[Math.floor(Math.random()*NIGHT_OUT_CANCEL_LINES.length)]}
+function showCancelNightOut(){
+ openSheet(`<div class="sheet-head"><div><p class="eyebrow">Night Out Mode</p><h2>Cancel Night Out?</h2></div><button class="sheet-close" data-close>×</button></div>
+ <article class="night-confirm-card"><strong>Plans changed?</strong><p>Character development.</p></article>
+ <div class="night-confirm-actions"><button class="primary" id="night-cancel-yes">YES, CANCEL</button><button class="secondary" data-close>KEEP IT ACTIVE</button></div>`);
+ const yes=$('#night-cancel-yes');if(yes)yes.onclick=()=>{data.nightOut=null;save();const line=pickNightOutCancelLine();openSheet(`<div class="sheet-head"><div><p class="eyebrow">Night Out Cancelled</p><h2>Plot twist.</h2></div><button class="sheet-close" data-close>×</button></div><div class="night-party-unicorn"><div class="night-party-ring"><img src="${UNICORN_STATES.rest.image}" alt=""></div><div class="night-party-speech">${escapeHtml(line)}</div></div><button class="primary" id="night-cancel-done">BACK TO HOME</button>`);const done=$('#night-cancel-done');if(done)done.onclick=()=>{closeSheet();render()};};
+}
 function showNightOutParty(){
  const s=nightOutState(),line=s?.partyLine||pickNightOutLine();
  openSheet(`<div class="sheet-head"><div><p class="eyebrow">Night Out Activated</p><h2>Well then.</h2></div><button class="sheet-close" data-close>×</button></div>
  <div class="night-party-unicorn"><div class="night-party-ring"><img src="${UNICORN_STATES.evening.image}" alt=""></div><div class="night-party-speech">${escapeHtml(line)}</div></div>
  <p class="subtle">You don't need to log anything now. Come back later or tomorrow and add roughly what you drank.</p>
- <div class="night-confirm-actions"><button class="primary" id="night-open-drinks">OPEN DRINK MENU</button><button class="secondary" data-close>ENJOY THE NIGHT</button></div>`);
+ <div class="night-confirm-actions"><button class="primary" id="night-open-drinks">OPEN DRINK MENU</button><button class="secondary" data-close>ENJOY THE NIGHT</button><button class="text-btn night-cancel-btn" id="night-cancel-mode" type="button">CANCEL NIGHT OUT</button></div>`);
  const b=$('#night-open-drinks');if(b)b.onclick=()=>openNightOut(isoToday());
+ const c=$('#night-cancel-mode');if(c)c.onclick=showCancelNightOut;
 }
 function nightEstimatePreset(level){
  const presets={

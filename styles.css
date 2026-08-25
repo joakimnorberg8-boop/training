@@ -172,3 +172,7 @@ button,input,select,textarea{font:inherit}button{color:inherit;touch-action:mani
 .last-night-summary{display:flex;justify-content:space-between;gap:12px;align-items:center;border:1px solid var(--border);border-radius:14px;padding:12px 14px;margin-bottom:12px}
 .last-night-summary span{font-size:10px;letter-spacing:.12em;color:var(--muted);font-weight:800}
 .last-night-summary strong{text-align:right}
+
+/* v46.1: cancel Night Out changes only activation state; logged drinks remain nutrition history. */
+.night-cancel-btn{justify-self:center;margin-top:4px;color:var(--muted)}
+.night-cancel-btn:active{color:var(--pink)}
