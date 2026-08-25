@@ -7,7 +7,7 @@ const defaults={
  customWorkouts:[],customPrograms:[],sessions:[],measurements:[],nutrition:[],recipeFavorites:[],customRecipes:[],
  planned:[], activeSession:null, profileCreated:false, sassSeed:null, dailySass:{date:null,text:''},
  notificationSettings:{workout:true,nutrition:true,progress:true,dailySass:true,unhinged:true,dailyTime:'09:00',nutritionTime:'19:00'},
- notifications:[], notificationMeta:{dailySassDate:null,nutritionDate:null,absenceDate:null,streakMilestone:null}, unicornEvent:null
+ notifications:[], notificationMeta:{dailySassDate:null,nutritionDate:null,absenceDate:null,streakMilestone:null}, unicornEvent:null, coachCheckins:[]
 };
 
 const sass={
@@ -26,7 +26,18 @@ const sass={
  first:["First workout logged. Your ass is now officially a long-term infrastructure project.","One workout down. The transformation montage has legally begun."],
  back:["Look who crawled back to the gym. Character development.","The weights missed you. I told them not to get attached."],
  rest:["Rest. Even icons need recovery.","Recovery day. Grow in peace and judge people quietly."],
- missed:["You ghosted the gym. Very on brand.","The weights noticed you were missing. Awkward."]
+ missed:["You ghosted the gym. Very on brand.","The weights noticed you were missing. Awkward."],
+ morning:["Good morning, gorgeous. Go give someone a reason to stare.","Morning, babe. Coffee first, then build the body your tank tops deserve.","Good morning. The gym opens before Grindr gets interesting. Use that information wisely.","Rise and shine, homosexual. Your delts have appointments."],
+ afternoon:["Afternoon check. Plenty of daylight left to become inconveniently attractive.","The day is half gone. Your pump does not have to be.","Afternoon, gorgeous. Go move something heavier than your emotional baggage."],
+ evening:["Evening plans? Apparently becoming hotter counts.","The day is winding down. Your training era is not.","Clock is ticking, babe. Give the mirror something new to discuss."],
+ late:["Still awake? Muscles grow while you sleep, not while you inspect them.","It is late. Put the phone down and let the ass regenerate.","Bedtime, gorgeous. Recovery is the least glamorous part of being annoyingly hot."],
+ post:["Back again? Checking whether the jockstrap fits differently yet?","You already trained. The pump will not grow faster because you refresh the app.","Workout logged. Yes, you may inspect the evidence again.","Back already? Your muscles are recovering. Your vanity clearly is not."],
+ postLegs:["Leg day survived. Walking normally is tomorrow's administrative problem.","Legs done. Stairs have been promoted to enemy combatant.","Lower body complete. Sit down carefully, princess."],
+ postPull:["Pull complete. Back getting wider, doorframes getting nervous.","Pull day done. Keep this up and your shirts are going to need negotiations.","Back trained. Waist-to-lat ratio entering suspicious territory."],
+ postPush:["Push complete. The chest has filed for more shelf space.","Push day done. T-shirts are now a temporary housing solution.","Chest and shoulders handled. Posture of a man with absolutely no reason to be humble."],
+ multi:["Two workouts in one day. Moderation was apparently not invited.","Double session logged. Your calendar says ambitious. Your laundry says emergency.","Strength and cardio? Pick a struggle, gorgeous. Apparently you picked all of them.","Back again and again. At this point the gym owes you visitation rights."],
+ prHome:["New PB. Unfortunately, your ego now requires its own locker.","Personal best detected. Be normal about it for at least six minutes.","New PB. Screenshot it before your humility comes back."],
+ fedDone:["Trained and fed. Disturbingly responsible behavior.","Workout done, protein handled. Someone alert the gay council.","Lifted, fed, hydrated-ish. Character development."]
 };
 const RECIPES=[
 {id:'beef-lentil-power',name:'Beef & Lentil Power Bowl',cuisine:'Other',meal:'Lunch',image:'assets/lentil_power_bowl.jpg',kcal:720,protein:55,carbs:82,fat:18,fiber:16,time:30,tags:['High protein'],ingredients:['200 g lean ground beef (5% fat)','150 g cooked green lentils','150 g cooked brown rice','100 g crushed tomatoes','80 g spinach','1/2 red bell pepper','1/2 yellow onion','1 tsp olive oil','Cumin, smoked paprika, salt and pepper'],steps:['Cook the rice if needed.','Heat the oil and brown the beef with onion and spices.','Add tomatoes, lentils and bell pepper; simmer for 5–7 minutes.','Fold in spinach until wilted.','Serve over rice and season to taste.']},
@@ -62,16 +73,49 @@ function recipeFit(r){const today=data.nutrition.filter(n=>n.date===isoToday());
 function sortedRecipes(list){return [...list].sort((a,b)=>recipeFit(a)-recipeFit(b))}
 function pickSass(group='welcome'){const a=sass[group]||sass.welcome;let last=data.sassSeed;let i=Math.floor(Math.random()*a.length);if(a.length>1&&i===last)i=(i+1)%a.length;data.sassSeed=i;save();return a[i]}
 function daysSinceLastSession(){if(!data.sessions.length)return null;const latest=Math.max(...data.sessions.map(s=>new Date(`${s.date}T12:00:00`).getTime()));return Math.max(0,Math.floor((new Date(`${isoToday()}T12:00:00`).getTime()-latest)/86400000))}
+function completedSessionsForDate(date=isoToday()){
+ return (data.sessions||[]).filter(s=>s.date===date&&s.completed!==false).slice().sort((a,b)=>Number(b.finishedAt||b.startedAt||0)-Number(a.finishedAt||a.startedAt||0));
+}
+function latestCompletedSession(date=isoToday()){return completedSessionsForDate(date)[0]||null}
+function todayState(){
+ const date=isoToday(),hour=new Date().getHours(),sessions=completedSessionsForDate(date),session=sessions[0]||null,active=data.activeSession||null;
+ const planned=(data.planned||[]).find(p=>p.date===date)||null;
+ const rest=!!planned&&(planned.type==='rest'||/rest|recovery/i.test(planned.name||''));
+ const plannedCompleted=!!planned?.workoutId&&sessions.some(s=>s.workoutId===planned.workoutId);
+ const pendingPlanned=!rest&&!!planned?.workoutId&&!plannedCompleted?planned:null;
+ const pr=sessions.flatMap(s=>s.prs||[])[0]||((data.unicornEvent?.type==='pr'&&data.unicornEvent.discoveredDate===date)?data.unicornEvent:null);
+ return {date,hour,active,sessions,session,planned,pendingPlanned,plannedCompleted,rest,pr,gap:daysSinceLastSession(),streak:calcStreak(),nutrition:todaysNutritionStatus()};
+}
+function workoutFlavor(session){
+ const name=`${session?.name||''} ${(session?.items||[]).map(x=>x.muscle||'').join(' ')}`.toLowerCase();
+ if(/leg|lower|quad|hamstring|glute|calf/.test(name))return 'postLegs';
+ if(/pull|back|lat|bicep/.test(name))return 'postPull';
+ if(/push|chest|shoulder|tricep/.test(name))return 'postPush';
+ return 'post';
+}
+function sassContext(){
+ const st=todayState();let group='welcome',key='welcome';
+ if(st.active){group='active';key=`active:${st.active.id}`}
+ else if(st.pr){group='prHome';key=`pr:${st.session?.id||st.pr.sessionId||st.pr.exercise||'today'}`}
+ else if(st.sessions.length>1){
+  group='multi';key=`multi:${st.sessions.map(s=>s.id).sort().join(':')}`;
+ }else if(st.session){
+  if(st.nutrition.kcalRatio>=.72&&st.nutrition.proteinRatio>=.72)group='fedDone';else group=workoutFlavor(st.session);
+  key=`done:${st.session.id}:${group}`;
+ }else if(st.rest){group='rest';key='rest'}
+ else if(st.gap!==null&&st.gap>=5){group='back';key=`back:${st.gap}`}
+ else if(st.streak>=7){group='streak';key=`streak:${st.streak}`}
+ else if(st.hour<10){group='morning';key='morning'}
+ else if(st.hour<17){group='afternoon';key='afternoon'}
+ else if(st.hour<22){group='evening';key='evening'}
+ else {group='late';key='late'}
+ return {group,key,state:st};
+}
 function homeSass(){
- const today=isoToday();
- if(data.dailySass?.date===today&&data.dailySass.text)return data.dailySass.text;
- let group=data.profile.goal||'welcome';
- if(data.activeSession)group='active';
- else{const gap=daysSinceLastSession();if(gap!==null&&gap>=5)group='back';else if(calcStreak()>=7)group='streak';else if(data.sessions.some(s=>s.date===today))group='strength'}
+ const {group,key,state}=sassContext();
+ if(data.dailySass?.date===state.date&&data.dailySass.key===key&&data.dailySass.text)return data.dailySass.text;
  const text=pickSass(group);
- data.dailySass={date:today,text};
- save();
- return text;
+ data.dailySass={date:state.date,key,text};save();return text;
 }
 function completionSass(session,durationMin,doneSets,totalSets){const previousCount=data.sessions.length;const completion=totalSets?doneSets/totalSets:1;const nextStreak=calcStreakWithDate(session.date);if(previousCount===0)return pickSass('first');if(nextStreak>=7)return pickSass('streak');if(session.type!=='cardio'&&totalSets&&completion<0.5)return pickSass('partial');if(durationMin<20)return pickSass('quick');if(durationMin>=75)return pickSass('long');if(session.type==='cardio')return pickSass('cardio');if(session.type==='rehab')return pickSass('rehab');return pickSass('strength')}
 function streakDateSet(extraDate){
@@ -229,67 +273,28 @@ const UNICORN_STATES={
 };
 function unicornWithSass(base,sass){return {...base,sass}}
 function unicornState(){
- const today=isoToday();
- const hour=new Date().getHours();
- const nut=todaysNutritionStatus();
- const streak=calcStreak();
- const gap=daysSinceLastSession();
- const todaysPlan=(data.planned||[]).find(p=>p.date===today)||null;
- const plannedRest=!!todaysPlan&&(todaysPlan.type==='rest'||/rest|recovery/i.test(todaysPlan.name||''));
- const plannedWorkout=!!todaysPlan&&!plannedRest;
- const trainedToday=(data.sessions||[]).some(s=>s.date===today&&s.completed!==false);
-
- if(data.activeSession){
-  return unicornWithSass(UNICORN_STATES.pump,'Good. You showed up. Don’t get comfortable.');
+ const st=todayState(),nut=st.nutrition;
+ if(st.active)return unicornWithSass(UNICORN_STATES.pump,'Good. You showed up. Don’t get comfortable.');
+ if(st.pr){const exercise=st.pr.exercise||st.pr.name?` ${st.pr.exercise||st.pr.name}`:'',weight=st.pr.weight?` ${st.pr.weight} kg${st.pr.reps?` × ${st.pr.reps}`:''}.`:'';return unicornWithSass(UNICORN_STATES.pr,`NEW PB${exercise}!${weight} Your ego has earned five minutes.`)}
+ if(st.sessions.length>1){
+  const cardio=st.sessions.filter(s=>s.type==='cardio').length,strength=st.sessions.length-cardio;
+  const mix=cardio&&strength?`${strength} strength + ${cardio} cardio`:`${st.sessions.length} workouts`;
+  return unicornWithSass(UNICORN_STATES.pump,`${mix} today. Apparently one session was not dramatic enough.`);
  }
- if(data.unicornEvent?.type==='pr'&&data.unicornEvent.discoveredDate===today){
-  const exercise=data.unicornEvent.exercise?` ${data.unicornEvent.exercise}`:'';
-  const result=data.unicornEvent.weight?` ${data.unicornEvent.weight} kg${data.unicornEvent.reps?` × ${data.unicornEvent.reps}`:''}.`:'';
-  return unicornWithSass(UNICORN_STATES.pr,`NEW PB${exercise}!${result} You absolute freak.`);
+ if(st.session){
+  if(st.pendingPlanned)return unicornWithSass(UNICORN_STATES.newWorkout,`${st.session.name} logged. ${st.pendingPlanned.name||'Your planned workout'} is still waiting.`);
+  if(nut.kcalRatio>=.72&&nut.proteinRatio>=.72)return unicornWithSass(UNICORN_STATES.fed,'Trained and fed. Annoyingly responsible.');
+  return unicornWithSass(UNICORN_STATES.pump,'Workout done. The pump is temporary. The evidence is saved.');
  }
- if(plannedRest){
-  return unicornWithSass(UNICORN_STATES.rest,'Rest is part of the plan. Recover today, cause problems tomorrow.');
- }
- if(gap!==null&&gap>=4){
-  return unicornWithSass(UNICORN_STATES.judging,`${gap} days without training. The dumbbells have filed a missing person report.`);
- }
-
+ if(st.rest)return unicornWithSass(UNICORN_STATES.rest,'Rest is part of the plan. Recover today, cause problems tomorrow.');
+ if(st.gap!==null&&st.gap>=4)return unicornWithSass(UNICORN_STATES.judging,`${st.gap} days without training. The dumbbells have filed a missing person report.`);
  const nutritionCheck=notificationTimeReached(notificationSettings().nutritionTime||'19:00');
- if(nutritionCheck){
-  const kcalLeft=Math.max(0,Math.round((data.profile.calorieTarget||0)-nut.kcal));
-  const proteinLeft=Math.max(0,Math.round((data.profile.proteinTarget||0)-nut.protein));
-  if(nut.kcalRatio<.70&&nut.proteinRatio<.70){
-   return unicornWithSass(UNICORN_STATES.hungry,`${kcalLeft} kcal and ${proteinLeft} g protein left. Go eat.`);
-  }
-  if(nut.kcalRatio<.70&&nut.proteinRatio>=.70){
-   return unicornWithSass(UNICORN_STATES.calories,`${kcalLeft} kcal left. Protein survived. Your calories did not.`);
-  }
-  if(nut.proteinRatio<.70&&nut.kcalRatio>=.70){
-   return unicornWithSass(UNICORN_STATES.protein,`${proteinLeft} g protein left. That number is looking tragic.`);
-  }
- }
-
- if(streak>=3){
-  return unicornWithSass(UNICORN_STATES.streak,`${streak} day streak. Discipline looks good on you.`);
- }
- if(trainedToday&&nut.kcalRatio>=.72&&nut.proteinRatio>=.72){
-  return unicornWithSass(UNICORN_STATES.fed,'Trained and fed. Annoyingly responsible.');
- }
- if(trainedToday){
-  return unicornWithSass(UNICORN_STATES.pump,'Workout done. Smashed it. Now go recover.');
- }
- if(plannedWorkout){
-  return unicornWithSass(UNICORN_STATES.newWorkout,`${todaysPlan.name||'Workout'} is waiting. You know what to do.`);
- }
- if(hour>=22||hour<5){
-  return unicornWithSass(UNICORN_STATES.late,'Still awake? Legends recover too. Go to bed.');
- }
- if(hour<12){
-  return unicornWithSass(UNICORN_STATES.morning,'Morning, babe. Discipline looks good on you.');
- }
- if(hour<18){
-  return unicornWithSass(UNICORN_STATES.afternoon,'Afternoon check. Plenty of day left to get it done.');
- }
+ if(nutritionCheck){const kcalLeft=Math.max(0,Math.round((data.profile.calorieTarget||0)-nut.kcal)),proteinLeft=Math.max(0,Math.round((data.profile.proteinTarget||0)-nut.protein));if(nut.kcalRatio<.70&&nut.proteinRatio<.70)return unicornWithSass(UNICORN_STATES.hungry,`${kcalLeft} kcal and ${proteinLeft} g protein left. Go eat.`);if(nut.kcalRatio<.70&&nut.proteinRatio>=.70)return unicornWithSass(UNICORN_STATES.calories,`${kcalLeft} kcal left. Protein survived. Your calories did not.`);if(nut.proteinRatio<.70&&nut.kcalRatio>=.70)return unicornWithSass(UNICORN_STATES.protein,`${proteinLeft} g protein left. That number is looking tragic.`)}
+ if(st.streak>=3)return unicornWithSass(UNICORN_STATES.streak,`${st.streak} day streak. Discipline looks good on you.`);
+ if(st.planned&&!st.rest)return unicornWithSass(UNICORN_STATES.newWorkout,`${st.planned.name||'Workout'} is waiting. You know what to do.`);
+ if(st.hour>=22||st.hour<5)return unicornWithSass(UNICORN_STATES.late,'Still awake? Legends recover too. Go to bed.');
+ if(st.hour<10)return unicornWithSass(UNICORN_STATES.morning,'Good morning, gorgeous. Go give someone a reason to stare.');
+ if(st.hour<17)return unicornWithSass(UNICORN_STATES.afternoon,'Afternoon check. Plenty of day left to get it done.');
  return unicornWithSass(UNICORN_STATES.evening,'Finish strong. Close the day like a beast.');
 }
 function unicornMood(){const u=unicornState();return {mood:u.key,label:u.label,image:u.image,sass:u.sass}}
@@ -301,21 +306,37 @@ function weekDays(offset=0){let start=new Date();start.setHours(12,0,0,0);start.
 let planWeekOffset=0;
 function thisWeekSessions(){const days=weekDays().map(isoToday);return data.sessions.filter(s=>days.includes(s.date))}
 function homeWorkoutState(){
- if(data.activeSession){
-  return {name:data.activeSession.name,type:data.activeSession.type||'strength',active:true,items:data.activeSession.items||[],startedAt:data.activeSession.startedAt,workoutId:data.activeSession.workoutId||''};
- }
- const planned=(data.planned||[]).find(x=>x.date===isoToday())||null;
- if(!planned)return null;
- if(planned.type==='rest')return {...planned,planned:true};
- if(!planned.workoutId)return null;
- const workout=(data.customWorkouts||[]).find(w=>w.id===planned.workoutId);
- return workout?{...planned,name:planned.name||workout.name,type:planned.type||workout.type||'strength',planned:true}:null;
+ const st=todayState();
+ if(st.active)return {kind:'active',name:st.active.name,type:st.active.type||'strength',active:true,items:st.active.items||[],startedAt:st.active.startedAt,workoutId:st.active.workoutId||'',session:st.active,sessions:st.sessions};
+ let pending=null;
+ if(st.pendingPlanned){const workout=(data.customWorkouts||[]).find(w=>w.id===st.pendingPlanned.workoutId);if(workout)pending={kind:'planned',...st.pendingPlanned,name:st.pendingPlanned.name||workout.name,type:st.pendingPlanned.type||workout.type||'strength',planned:true}}
+ if(st.sessions.length)return {kind:'day',completed:true,sessions:st.sessions,pending,rest:st.rest};
+ if(st.rest)return {kind:'rest',...st.planned,planned:true,sessions:[]};
+ if(pending)return {...pending,sessions:[]};
+ return null;
+}
+function sessionHomeMeta(s){
+ const prs=s.prs?.length||0;
+ if(s.type==='cardio')return `${s.durationMin||0} min${s.distance?` · ${s.distance} km`:''}`;
+ return `${s.durationMin||0} min · ${s.doneSets||0}/${s.totalSets||0} sets${prs?` · ${prs} PB${prs===1?'':'s'}`:''}`;
+}
+function completedHomeMarkup(today){
+ const sessions=today.sessions||[];
+ const count=sessions.length,totalMin=sessions.reduce((n,s)=>n+(Number(s.durationMin)||0),0);
+ const rows=sessions.map(s=>`<button class="home-session-row" data-home-session="${escapeHtml(s.id)}"><span class="home-session-icon ${s.type==='cardio'?'cardio':''}">${s.type==='cardio'?'C':'✓'}</span><span class="grow"><strong>${escapeHtml(s.name)}</strong><small>${escapeHtml(sessionHomeMeta(s))}</small></span><span class="chev">›</span></button>`).join('');
+ const pending=today.pending?`<div class="home-next-workout"><div><span class="eyebrow">UP NEXT</span><strong>${escapeHtml(today.pending.name)}</strong><small>${escapeHtml(today.pending.type||'strength')}</small></div><button class="primary compact" id="home-start">START</button></div>`:`<button class="secondary home-add-workout" id="home-start">+ START ANOTHER WORKOUT</button>`;
+ return `<span class="eyebrow completed-label">TODAY'S TRAINING</span><div class="home-day-title"><h2 class="hero-title">${count} ${count===1?'workout':'workouts'} complete</h2><span>${totalMin} min total</span></div><div class="home-session-list">${rows}</div>${pending}`;
 }
 function home(){const today=homeWorkoutState();const week=thisWeekSessions();const min=week.reduce((a,s)=>a+(s.durationMin||0),0);const foods=data.nutrition.filter(n=>n.date===isoToday());const kcal=foods.reduce((a,n)=>a+(+n.kcal||0),0),prot=foods.reduce((a,n)=>a+(+n.protein||0),0);const latest=data.measurements.at(-1)?.weight??data.profile.weight;const first=data.measurements[0]?.weight??latest;const diff=(latest-first).toFixed(1);const days=weekDays();
- shell(`${header()}<section class="home-intro"><p class="eyebrow">${fmtDate(new Date())}</p><h1 class="greeting">${escapeHtml(homeSass())}</h1><p class="daily-sass-note">Today's GAYM energy · changes tomorrow</p></section><section class="section"><p class="eyebrow">Today's workout</p><article class="card hero-card">${renderHomeUnicorn()}<div class="hero-content">${today?`<span class="eyebrow" style="color:var(--cyan)">${today.active?'Workout in progress':today.type||'Training'}</span><h2 class="hero-title">${escapeHtml(today.name)}</h2><div class="meta">${today.active?`${today.items?.length||0} exercises · started ${new Date(today.startedAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`:'Ready when you are.'}</div><div class="stats-row"><span class="stat-pill">${today.type||'strength'}</span>${today.active?'<span class="stat-pill">Autosaved</span>':''}</div><button class="primary" id="home-start">${today.active?'CONTINUE WORKOUT':today.type==='rest'?'VIEW REST DAY':'START WORKOUT'}</button>`:`<span class="eyebrow" style="color:var(--cyan)">TODAY</span><h2 class="hero-title">No plans today</h2><div class="meta">Your calendar is clear. Train if you want to, gorgeous.</div><div class="stats-row"><span class="stat-pill">Choose your workout</span></div><button class="primary" id="home-start">START WORKOUT</button>`}</div></article></section>
+ let heroBody='';
+ if(today?.completed)heroBody=completedHomeMarkup(today);
+ else if(today)heroBody=`<span class="eyebrow" style="color:var(--cyan)">${today.active?'Workout in progress':today.type||'Training'}</span><h2 class="hero-title">${escapeHtml(today.name)}</h2><div class="meta">${today.active?`${today.items?.length||0} exercises · started ${new Date(today.startedAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`:'Ready when you are.'}</div><div class="stats-row"><span class="stat-pill">${today.type||'strength'}</span>${today.active?'<span class="stat-pill">Autosaved</span>':''}</div><button class="primary" id="home-start">${today.active?'CONTINUE WORKOUT':today.type==='rest'?'VIEW REST DAY':'START WORKOUT'}</button>`;
+ else heroBody=`<span class="eyebrow" style="color:var(--cyan)">TODAY</span><h2 class="hero-title">No plans today</h2><div class="meta">Your calendar is clear. Train if you want to, gorgeous.</div><div class="stats-row"><span class="stat-pill">Choose your workout</span></div><button class="primary" id="home-start">START WORKOUT</button>`;
+ shell(`${header()}<section class="home-intro"><p class="eyebrow">${fmtDate(new Date())}</p><div class="daily-brief"><span class="daily-brief-kicker">DAILY GAYM CHECK-IN</span><p class="greeting">${escapeHtml(homeSass())}</p><span class="daily-brief-rule"></span></div></section><section class="section"><p class="eyebrow">Today's workout</p><article class="card hero-card">${renderHomeUnicorn()}<div class="hero-content">${heroBody}</div></article></section>
+ <section class="section coach-home-section">${coachMarkup()}</section>
  <section class="section"><div class="section-head"><h2>This week</h2><button class="text-btn" data-home-plan>VIEW PLAN</button></div><article class="card week-card"><div class="week-summary"><span>${week.length} workouts · ${Math.floor(min/60)}h ${min%60}m</span><span>${week.reduce((a,s)=>a+(s.durationMin||0),0)} min</span></div><div class="week-days">${days.map(d=>{const done=data.sessions.some(s=>s.date===isoToday(d));return `<div class="day ${done?'done':''} ${isoToday(d)===isoToday()?'today':''}"><span>${d.toLocaleDateString('en',{weekday:'short'}).slice(0,2)}</span><span class="day-dot">${done?'✓':d.getDate()}</span></div>`}).join('')}</div></article></section>
  <section class="section"><div class="quick-grid"><button class="card quick-card" data-home-nutrition style="text-align:left"><div style="display:flex;justify-content:space-between"><span class="quick-label">NUTRITION</span><span class="ring" style="--p:${Math.min(100,kcal/data.profile.calorieTarget*100)}"></span></div><div><div class="quick-value">${kcal.toLocaleString()} <small style="font-size:11px;color:var(--muted)">kcal</small></div><div class="quick-sub">${Math.round(prot)} / ${data.profile.proteinTarget} g protein</div></div></button><button class="card quick-card" data-home-progress style="text-align:left"><span class="quick-label">PROGRESS</span><div><div class="quick-value">${latest.toFixed?latest.toFixed(1):latest} <small style="font-size:11px;color:var(--muted)">kg</small></div><div class="quick-sub">${+diff>=0?'+':''}${diff} kg logged change</div><svg class="spark" viewBox="0 0 120 26"><polyline points="0,21 18,18 34,20 51,13 67,15 83,8 100,11 120,4"/></svg></div></button></div></section>`);
- $('#home-start').onclick=()=>{if(data.activeSession)go('active');else if(today?.type==='rest')go('plan');else if(today?.workoutId)startWorkout(today.workoutId);else go('workout')};$('[data-home-plan]').onclick=()=>go('plan');$('[data-home-nutrition]').onclick=()=>go('nutrition');$('[data-home-progress]').onclick=()=>go('progress');}
+ const homeStart=$('#home-start');if(homeStart)homeStart.onclick=()=>{if(data.activeSession)return go('active');if(today?.kind==='day'&&today.pending?.workoutId)return startWorkout(today.pending.workoutId);if(today?.kind==='day')return go('workout');if(today?.type==='rest')return go('plan');if(today?.workoutId)return startWorkout(today.workoutId);go('workout')};$$('[data-home-session]').forEach(b=>b.onclick=()=>openSessionDetail(b.dataset.homeSession));$('[data-home-plan]').onclick=()=>go('plan');$('[data-home-nutrition]').onclick=()=>go('nutrition');$('[data-home-progress]').onclick=()=>go('progress');const cw=$('#coach-why');if(cw)cw.onclick=openCoachWhy;}
 function sortedSessionsDesc(){return [...data.sessions].sort((a,b)=>String(b.date).localeCompare(String(a.date))||(Number(b.finishedAt||0)-Number(a.finishedAt||0)))}
 function plan(){const days=weekDays(planWeekOffset);const sessions=sortedSessionsDesc().slice(0,8);shell(`${header()}<h1 class="page-title">My Plan</h1><p class="subtle">Your week at a glance. Finished sessions and anything you plan yourself live here.</p><div class="calendar-head"><button class="icon-btn" id="prev-week">‹</button><strong>${days[0].toLocaleDateString('en',{month:'short',day:'numeric'}).toUpperCase()} – ${days[6].toLocaleDateString('en',{month:'short',day:'numeric'}).toUpperCase()}</strong><button class="icon-btn" id="next-week">›</button></div><div class="calendar">${['M','T','W','T','F','S','S'].map(x=>`<div class="cal-label">${x}</div>`).join('')}${days.map(d=>{const dateKey=isoToday(d),planned=data.planned.find(p=>p.date===dateKey),has=data.sessions.some(s=>s.date===dateKey)||!!planned,isRest=planned?.type==='rest';return `<button class="cal-day ${dateKey===isoToday()?'today':''} ${has?'has':''} ${isRest?'rest-planned':''}" data-date="${dateKey}"><span>${d.getDate()}</span>${has?`<span class="cal-dot">${isRest?'R':''}</span>`:''}</button>`}).join('')}</div><section class="section"><div class="section-head"><h2>Recent activity</h2><button class="text-btn" id="plan-add">+ PLAN</button></div><div class="list">${sessions.length?sessions.map(sessionCard).join(''):`<div class="empty"><strong>No finished sessions yet</strong>Your completed workouts will appear here.</div>`}</div></section>`);$('#plan-add').onclick=()=>openPlanSheet();$$('[data-date]').forEach(b=>b.onclick=()=>openDaySheet(b.dataset.date));$('#prev-week').onclick=()=>{planWeekOffset--;plan()};$('#next-week').onclick=()=>{planWeekOffset++;plan()};}
 function sessionCard(s){const cls=s.type==='cardio'?'cardio':s.type==='rehab'?'rehab':'';return `<button class="list-card" style="width:100%;color:inherit;text-align:left" data-session-id="${s.id}"><span class="badge-icon ${cls}">${s.type==='cardio'?'↗':s.type==='rehab'?'R':'S'}</span><span class="grow"><h3>${escapeHtml(s.name)}</h3><p>${s.date} · ${s.durationMin||0} min</p></span><span class="chev">›</span></button>`}
@@ -568,7 +589,8 @@ function openCustomProgramMenu(id){
 }
 function workout(){
  const customPrograms=data.customPrograms||[];
- shell(`${header()}<h1 class="page-title">Workout</h1><p class="subtle">Create a one-off workout, jump into a GAYM program, or build your own day-by-day training plan.</p>
+ const recovery=muscleRecovery();
+ shell(`${header()}<h1 class="page-title">Workout</h1><p class="subtle">Create a one-off workout, jump into a GAYM program, or build your own day-by-day training plan.</p>${recovery.length?`<section class="section recovery-strip"><div class="section-head"><h2>Last trained</h2><span class="eyebrow">RECOVERY SNAPSHOT</span></div><div class="recovery-chips">${recovery.map(r=>`<span class="recovery-chip ${r.days===0?'today':''}"><strong>${escapeHtml(r.muscle)}</strong><small>${r.days===0?'today':r.days===1?'1 day ago':`${r.days} days ago`}</small></span>`).join('')}</div></section>`:''}
  <section class="section"><p class="eyebrow">Choose workout type</p><div class="builder-type-grid"><button class="type-card active" data-type="strength">${icons.workout}<strong>Strength</strong><small>Sets, reps & weight</small></button><button class="type-card" data-type="cardio"><span style="font-size:23px;color:var(--cyan)">↗</span><strong>Cardio</strong><small>Time, distance & intervals</small></button><button class="type-card" data-type="rehab"><span style="font-size:21px;color:var(--lime);font-weight:900">R</span><strong>Rehab</strong><small>Controlled sets & notes</small></button></div></section>
  <section class="section"><p class="eyebrow">Ready-made programs</p><div class="builder-type-grid program-type-grid"><button class="type-card kai-type-card" data-program="kai"><span class="kai-mark">K</span><strong>Kai</strong><small>Ready-made 5-day split</small></button><button class="type-card raymond-type-card" data-program="raymond"><span class="raymond-mark">R</span><strong>Raymond’s Big Gay Arms</strong><small>Biceps, triceps & sleeve problems</small></button><button class="type-card jocke-type-card" data-program="jocke"><span class="jocke-mark">J</span><strong>Jocke</strong><small>Push · Pull · Legs · Upper · Lower + Arms</small></button></div></section>
  <section class="section"><div class="section-head"><div><p class="eyebrow">Your programs</p><h2>Custom Programs</h2></div><button class="text-btn" id="new-program">+ CREATE</button></div><div class="custom-program-grid">${customPrograms.length?customPrograms.map(p=>`<button class="type-card custom-program-card" data-custom-program="${p.id}"><span class="custom-program-mark">P</span><strong>${escapeHtml(p.name)}</strong><small>${p.days?.length||0} days · Your plan</small></button>`).join(''):`<button class="type-card create-program-card" id="empty-program-create"><span class="custom-program-mark">+</span><strong>Create your program</strong><small>Plan strength, cardio, rehab & rest day by day</small></button>`}</div></section>
@@ -671,6 +693,70 @@ function startStrengthClock(session){
  update();workoutClockTimer=setInterval(update,10000);
 }
 function persistActiveSession(){if(data.activeSession)save()}
+function normalizeMuscle(muscle=''){
+ const m=muscle.toLowerCase();
+ if(/chest/.test(m))return 'Chest';if(/back|lat|scapula/.test(m))return 'Back';if(/shoulder|delt|rotator/.test(m))return 'Shoulders';if(/bicep|tricep|forearm/.test(m))return 'Arms';if(/quad|hamstring|glute|hip|calf|leg|knee/.test(m))return 'Legs';if(/core|ab/.test(m))return 'Core';return muscle.split('/')[0].trim()||'Other';
+}
+function daysBetween(dateA,dateB=isoToday()){
+ const a=new Date(`${dateA}T12:00:00`).getTime(),b=new Date(`${dateB}T12:00:00`).getTime();return Math.max(0,Math.round((b-a)/86400000));
+}
+function muscleRecovery(){
+ const latest=new Map();sortedSessionsDesc().filter(s=>s.completed!==false&&s.type!=='cardio').forEach(s=>(s.items||[]).forEach(item=>{const group=normalizeMuscle(item.muscle);if(group&&!latest.has(group))latest.set(group,s.date)}));
+ return [...latest.entries()].map(([muscle,date])=>({muscle,date,days:daysBetween(date)})).sort((a,b)=>a.days-b.days).slice(0,6);
+}
+function coachTargetMuscles(){
+ const st=todayState(),source=st.active||st.pendingPlanned;
+ if(!source)return [];
+ const workout=source.items?.length?source:(data.customWorkouts||[]).find(w=>w.id===source.workoutId);
+ return [...new Set((workout?.items||[]).map(x=>normalizeMuscle(x.muscle)).filter(Boolean))];
+}
+function lastMuscleLoad(group){
+ return sortedSessionsDesc().filter(s=>s.completed!==false&&s.type!=='cardio').map(s=>{
+  const items=(s.items||[]).filter(x=>normalizeMuscle(x.muscle)===group);
+  if(!items.length)return null;
+  const sets=items.reduce((n,x)=>n+(x.sets||[]).filter(z=>z.done!==false).length,0);
+  return {session:s,sets,days:daysBetween(s.date)};
+ }).find(Boolean)||null;
+}
+function latestCoachCheckin(){return (data.coachCheckins||[]).filter(x=>x.date===isoToday()).at(-1)||null}
+function getCoachInsight(){
+ const muscles=coachTargetMuscles();
+ if(!muscles.length)return {status:'ready',headline:'Nothing urgent today.',reason:'No strength workout is waiting for a recovery decision.',details:[]};
+ const loads=muscles.map(lastMuscleLoad).filter(Boolean).sort((a,b)=>a.days-b.days),recent=loads[0]||null,check=latestCoachCheckin();
+ let status='ready',headline='You’re good to train.',reason=recent?`${recent.session.name} touched this area ${recent.days===0?'today':recent.days===1?'yesterday':`${recent.days} days ago`}.`:'No recent session for these muscles.',details=[];
+ if(recent){details.push(`${recent.sets} completed sets in the most recent matching session.`);details.push(`Last matching load: ${recent.days===0?'today':recent.days===1?'1 day ago':`${recent.days} days ago`}.`)}
+ if(recent&&recent.days===0){status='recovery';headline='Consider recovery or a lighter session.';reason='You already trained part of this muscle group today.'}
+ else if(recent&&recent.days===1&&recent.sets>=10){status='caution';headline='Train, but keep an eye on recovery.';reason=`You trained this area yesterday with ${recent.sets} completed sets.`}
+ else if(recent&&recent.days===1){status='caution';headline='Probably trainable, but not fully fresh.';reason='This area was trained yesterday.'}
+ if(check){details.push(`Today’s check-in: ${check.feeling} · soreness ${check.soreness}.`);if(check.feeling==='rough'||check.soreness==='a lot'){status='recovery';headline='A recovery day is worth considering.';reason='Your own check-in suggests fatigue or substantial soreness.'}else if(status==='ready'&&(check.feeling==='normal'&&check.soreness==='some')){status='caution';headline='Train as planned, but adjust if performance feels off.';reason='Your check-in reports some soreness.'}}
+ return {status,headline,reason,details,muscles};
+}
+function coachMarkup(){const c=getCoachInsight();return `<article class="card coach-card ${c.status}"><div class="coach-card-head"><span class="coach-label">GAYM COACH</span><span class="coach-status">${c.status.toUpperCase()}</span></div><strong>${escapeHtml(c.headline)}</strong><p>${escapeHtml(c.reason)}</p><button class="text-btn coach-why" id="coach-why">WHY?</button></article>`}
+function openCoachWhy(){const c=getCoachInsight(),check=latestCoachCheckin();openSheet(`<div class="sheet-head"><div><p class="eyebrow">GAYM Coach</p><h2>Why this recommendation?</h2></div><button class="sheet-close" data-close>×</button></div><p class="subtle">Coach uses your existing workout history plus an optional quick check-in. It is guidance, not a biological recovery percentage.</p><div class="coach-reasons"><div><span>STATUS</span><strong>${c.status.toUpperCase()}</strong></div><p>${escapeHtml(c.reason)}</p>${c.details.map(x=>`<p>• ${escapeHtml(x)}</p>`).join('')}</div><section class="section"><p class="eyebrow">Quick check-in</p><div class="coach-check-grid"><button data-feeling="great" class="small-btn ${check?.feeling==='great'?'active':''}">GREAT</button><button data-feeling="normal" class="small-btn ${check?.feeling==='normal'?'active':''}">NORMAL</button><button data-feeling="rough" class="small-btn ${check?.feeling==='rough'?'active':''}">ROUGH</button></div><div class="coach-check-grid soreness"><button data-soreness="none" class="small-btn ${check?.soreness==='none'?'active':''}">NO SORENESS</button><button data-soreness="some" class="small-btn ${check?.soreness==='some'?'active':''}">SOME</button><button data-soreness="a lot" class="small-btn ${check?.soreness==='a lot'?'active':''}">A LOT</button></div><p class="science-note">Use this only when it adds useful context. You do not need to check in before every workout.</p></section>`);let feeling=check?.feeling||'normal',soreness=check?.soreness||'none';function commit(){data.coachCheckins=(data.coachCheckins||[]).filter(x=>x.date!==isoToday());data.coachCheckins.push({date:isoToday(),feeling,soreness,at:Date.now()});save();openCoachWhy()}$$('[data-feeling]').forEach(b=>b.onclick=()=>{feeling=b.dataset.feeling;commit()});$$('[data-soreness]').forEach(b=>b.onclick=()=>{soreness=b.dataset.soreness;commit()})}
+function weekCoachReview(){const week=thisWeekSessions(),strength=week.filter(s=>s.type!=='cardio'),cardio=week.filter(s=>s.type==='cardio'),sets=strength.reduce((n,s)=>n+(s.doneSets||0),0),prs=strength.reduce((n,s)=>n+(s.prs?.length||0),0);let win=prs?`${prs} new PB${prs===1?'':'s'} this week.`:strength.length?`${strength.length} strength session${strength.length===1?'':'s'} logged.`:'No strength sessions logged yet.';const muscleCounts={};strength.forEach(s=>(s.items||[]).forEach(x=>{const g=normalizeMuscle(x.muscle);muscleCounts[g]=(muscleCounts[g]||0)+(x.sets||[]).filter(z=>z.done!==false).length}));const entries=Object.entries(muscleCounts).sort((a,b)=>a[1]-b[1]);const watch=entries.length>2?`${entries[0][0]} has the lowest logged volume this week (${entries[0][1]} sets).`:'Keep logging sessions to build a useful balance picture.';return {summary:`${week.length} workouts · ${sets} sets · ${cardio.length} cardio · ${prs} PB${prs===1?'':'s'}`,win,watch,next:entries.length>2?`Keep your strong areas moving and consider whether ${entries[0][0].toLowerCase()} needs attention.`:'Stay consistent and let the trend build.'}}
+function sessionCoachSummary(session){if(session.type==='cardio')return ['Cardio logged. Recovery advice will still prioritize your strength history.'];const tips=[];(session.items||[]).forEach(item=>{const p=progressionInfo(item,session.id);const best=bestCompletedSet(item);if(best&&p.previous){const now=estimated1RM(best.weight,best.reps),old=estimated1RM(p.previous.weight,p.previous.reps);if(now>old+0.5)tips.push(`${item.name}: performance moved up.`)}});return tips.slice(0,2).length?tips.slice(0,2):['Session logged. Your next target will use this performance as the new reference.']}
+function lastExerciseSession(name,excludeSessionId=''){
+ const key=String(name||'').trim().toLowerCase();return sortedSessionsDesc().find(s=>s.id!==excludeSessionId&&s.completed!==false&&s.type!=='cardio'&&(s.items||[]).some(x=>String(x.name||'').trim().toLowerCase()===key))||null;
+}
+function exerciseItemInSession(session,name){const key=String(name||'').trim().toLowerCase();return (session?.items||[]).find(x=>String(x.name||'').trim().toLowerCase()===key)||null}
+function bestCompletedSet(item){return (item?.sets||[]).filter(z=>z.done!==false&&Number(z.weight)>0&&Number(z.reps)>0).sort((a,b)=>estimated1RM(Number(b.weight),Number(b.reps))-estimated1RM(Number(a.weight),Number(a.reps)))[0]||null}
+function targetRepTop(target=''){const nums=String(target).match(/\d+/g)||[];return nums.length?Number(nums.at(-1)):null}
+function progressionInfo(item,excludeSessionId=''){
+ const previous=lastExerciseSession(item.name,excludeSessionId);if(!previous)return {previous:null,hint:'First logged session. Set the baseline.'};
+ const prevItem=exerciseItemInSession(previous,item.name),best=bestCompletedSet(prevItem);if(!best)return {previous:null,hint:'Previous session found. Add weight and reps to start comparisons.'};
+ const top=targetRepTop(item.targetReps),done=(prevItem.sets||[]).filter(z=>z.done!==false&&Number(z.weight)>0&&Number(z.reps)>0),sameWeight=done.length&&done.every(z=>Number(z.weight)===Number(best.weight));
+ const hitTop=top&&done.length&&done.every(z=>Number(z.reps)>=top);
+ const step=Number(best.weight)>=40?2.5:1;
+ const suggested=hitTop&&sameWeight?Math.round((Number(best.weight)+step)*2)/2:null;
+ return {previous:{weight:Number(best.weight),reps:Number(best.reps),date:previous.date},hint:suggested?`Try ${suggested} kg today`:`Beat ${Number(best.weight)} kg × ${Number(best.reps)}`};
+}
+function nextTimeSummary(session){
+ if(!session||session.type==='cardio')return [];
+ return (session.items||[]).map(item=>{const best=bestCompletedSet(item);if(!best)return null;const top=targetRepTop(item.targetReps),done=(item.sets||[]).filter(z=>z.done&&Number(z.weight)>0&&Number(z.reps)>0),allTop=top&&done.length&&done.every(z=>Number(z.reps)>=top&&Number(z.weight)===Number(best.weight)),step=Number(best.weight)>=40?2.5:1;return {name:item.name,current:`${Number(best.weight)} kg × ${Number(best.reps)}`,next:allTop?`Try ${Math.round((Number(best.weight)+step)*2)/2} kg`:`Beat ${Number(best.weight)} kg × ${Number(best.reps)}`}}).filter(Boolean).slice(0,3);
+}
+function actionToast(message,label,onAction,duration=5200){
+ const t=$('#toast');clearTimeout(toast._t);t.innerHTML=`<span>${escapeHtml(message)}</span><button type="button" class="toast-action">${escapeHtml(label)}</button>`;t.classList.add('show','actionable');const btn=$('.toast-action',t);if(btn)btn.onclick=()=>{t.classList.remove('show','actionable');t.textContent='';onAction?.()};toast._t=setTimeout(()=>{t.classList.remove('show','actionable');t.textContent=''},duration);
+}
 function startWorkoutTemplate(w){activeExerciseOpen=0;data.activeSession={id:uid(),workoutId:w.id||'',name:w.name,type:w.type||'strength',program:w.program||'',programDay:w.programDay||null,startedAt:Date.now(),date:isoToday(),notes:w.notes||'',duration:w.duration||0,distance:w.distance||0,mode:w.mode||'',items:(w.items||[]).map(x=>({name:x.name,muscle:x.muscle||'',equipment:x.equipment||'',targetReps:x.reps||'',note:x.note||'',sets:Array.from({length:x.sets||3},()=>({weight:'',reps:'',done:false}))}))};save();go('active')}
 function startWorkout(id){const w=data.customWorkouts.find(w=>w.id===id);if(!w)return go('workout');startWorkoutTemplate(w)}
 let activeExerciseOpen=0;
@@ -694,64 +780,24 @@ function muscleMap(muscle=''){
   <path d="M73 124 L83 124 L79 143 L70 143 Z" class="${cls(['calf','ankle'])}"/><path d="M97 124 L107 124 L110 143 L101 143 Z" class="${cls(['calf','ankle'])}"/>
  </svg><div><span>Primary area</span><strong>${escapeHtml(muscle||'Custom exercise')}</strong></div></div>`
 }
+function updateActiveProgressUI(s){
+ const total=s.items.reduce((sum,item)=>sum+(item.sets?.length||0),0),done=s.items.reduce((sum,item)=>sum+(item.sets||[]).filter(set=>set.done).length,0),count=$('#active-set-count'),bar=$('#active-progress-bar');if(count)count.textContent=`${done} of ${total} sets completed`;if(bar)bar.style.width=`${total?done/total*100:0}%`;
+}
 function active(){
- const s=data.activeSession;
- if(!s){go('workout');return}
- const mins=sessionElapsedMinutes(s);
- if(s.type==='cardio'){activeCardio(s,mins);return}
- const total=s.items.reduce((sum,item)=>sum+(item.sets?.length||0),0);
- const done=s.items.reduce((sum,item)=>sum+(item.sets||[]).filter(set=>set.done).length,0);
- shell(`${header('Workout',true)}
-  <div class="workout-header">
-   <p class="eyebrow">${escapeHtml(s.type)} · <span id="workout-elapsed-min">${mins}</span> min</p>
-   <h1 class="page-title">${escapeHtml(s.name)}</h1>
-   <p class="subtle">${done} of ${total} sets completed · changes save automatically</p>
-   <div class="progress-line"><span style="width:${total?done/total*100:0}%"></span></div>
-  </div>
-  <div id="active-session-list">${s.items.map((x,i)=>`<details class="session-exercise" data-exercise-index="${i}" ${i===activeExerciseOpen?'open':''}>
-   <summary><span class="exercise-num">${i+1}</span><strong>${escapeHtml(x.name)}</strong><span class="chev">⌄</span></summary>
-   <div class="sets">${muscleMap(x.muscle)}
-    <div class="set-head"><span>Set</span><span>kg</span><span>reps</span><span>done</span></div>
-    ${(x.sets||[]).map((z,j)=>`<div class="set-row"><span>${j+1}</span><input inputmode="decimal" value="${escapeHtml(z.weight)}" data-weight="${i}:${j}" placeholder="0"><input inputmode="numeric" value="${escapeHtml(z.reps)}" data-reps="${i}:${j}" placeholder="0"><button type="button" class="set-check ${z.done?'done':''}" data-check="${i}:${j}">${z.done?'✓':'○'}</button></div>`).join('')}
-    <div class="set-actions"><button type="button" class="small-btn pink" data-addset="${i}">+ ADD SET</button><button type="button" class="small-btn danger" data-removeset="${i}" ${(x.sets||[]).length<=1?'disabled':''}>− REMOVE SET</button></div>
-    <div class="session-note"><textarea data-note="${i}" rows="2" placeholder="Exercise note...">${escapeHtml(x.note||'')}</textarea></div>
-    <button type="button" class="text-btn danger-text" data-removeexercise="${i}">REMOVE EXERCISE</button>
-   </div>
-  </details>`).join('')}</div>
-  <section class="section active-workout-actions">
-   <button type="button" class="secondary" data-active-action="add-exercise">+ ADD EXERCISE</button>
-   <button type="button" class="primary" data-active-action="finish">FINISH WORKOUT</button>
-   <button type="button" class="danger-btn" data-active-action="cancel">CANCEL WORKOUT</button>
-  </section>`);
- const screen=$('.screen');
- if(!screen)return;
- startStrengthClock(s);
- const back=$('[data-back]');
- if(back)back.onclick=()=>go('home');
- screen.oninput=e=>{
-  const target=e.target;
-  if(target.matches('[data-weight]')){const[i,j]=target.dataset.weight.split(':').map(Number);if(s.items[i]?.sets?.[j]){s.items[i].sets[j].weight=target.value;save()}}
-  else if(target.matches('[data-reps]')){const[i,j]=target.dataset.reps.split(':').map(Number);if(s.items[i]?.sets?.[j]){s.items[i].sets[j].reps=target.value;save()}}
-  else if(target.matches('[data-note]')){const i=+target.dataset.note;if(s.items[i]){s.items[i].note=target.value;save()}}
- };
- screen.onclick=e=>{
-  const button=e.target.closest('button');
-  if(!button)return;
-  if(button.dataset.activeAction==='finish'){
-   button.disabled=true;
-   button.textContent='FINISHING…';
-   finishSession();
-   return;
-  }
-  if(button.dataset.activeAction==='cancel'){confirmCancel();return}
-  if(button.dataset.activeAction==='add-exercise'){
-   openExercisePicker(s.type,ex=>{const rx=defaultExercisePrescription(ex,s.type);s.items.push({name:ex.name,muscle:ex.muscle||'',equipment:ex.equipment||'',targetReps:rx.reps,note:'',sets:Array.from({length:rx.sets},()=>({weight:'',reps:'',done:false}))});save();active()});
-   return;
-  }
-  if(button.dataset.check){const[i,j]=button.dataset.check.split(':').map(Number);if(s.items[i]?.sets?.[j]){activeExerciseOpen=i;s.items[i].sets[j].done=!s.items[i].sets[j].done;save();active()}return}
+ const s=data.activeSession;if(!s){go('workout');return}const mins=sessionElapsedMinutes(s);if(s.type==='cardio'){activeCardio(s,mins);return}
+ const total=s.items.reduce((sum,item)=>sum+(item.sets?.length||0),0),done=s.items.reduce((sum,item)=>sum+(item.sets||[]).filter(set=>set.done).length,0);
+ shell(`${header('Workout',true)}<div class="workout-header"><p class="eyebrow">${escapeHtml(s.type)} · <span id="workout-elapsed-min">${mins}</span> min</p><h1 class="page-title">${escapeHtml(s.name)}</h1><p class="subtle"><span id="active-set-count">${done} of ${total} sets completed</span> · changes save automatically</p><div class="progress-line"><span id="active-progress-bar" style="width:${total?done/total*100:0}%"></span></div></div>
+  <div id="active-session-list">${s.items.map((x,i)=>{const prog=progressionInfo(x,s.id);return `<details class="session-exercise" data-exercise-index="${i}" ${i===activeExerciseOpen?'open':''}><summary><span class="exercise-num">${i+1}</span><strong>${escapeHtml(x.name)}</strong><span class="chev">⌄</span></summary><div class="sets">${muscleMap(x.muscle)}<div class="previous-performance">${prog.previous?`<span><small>LAST</small><strong>${prog.previous.weight} kg × ${prog.previous.reps}</strong></span>`:`<span><small>LAST</small><strong>NO DATA YET</strong></span>`}<span class="progression-hint">${escapeHtml(prog.hint)}</span></div><div class="exercise-coach-line"><span>COACH</span><strong>${escapeHtml(prog.hint)}</strong></div><div class="set-head"><span>Set</span><span>kg</span><span>reps</span><span>done</span></div>${(x.sets||[]).map((z,j)=>`<div class="set-row ${z.done?'set-done':''}" data-set-row="${i}:${j}"><span>${j+1}</span><input inputmode="decimal" value="${escapeHtml(z.weight)}" data-weight="${i}:${j}" placeholder="0"><input inputmode="numeric" value="${escapeHtml(z.reps)}" data-reps="${i}:${j}" placeholder="0"><button type="button" class="set-check ${z.done?'done':''}" data-check="${i}:${j}" aria-pressed="${z.done?'true':'false'}">${z.done?'✓':'○'}</button></div>`).join('')}<div class="set-actions"><button type="button" class="small-btn pink" data-addset="${i}">+ ADD SET</button><button type="button" class="small-btn danger" data-removeset="${i}" ${(x.sets||[]).length<=1?'disabled':''}>− REMOVE SET</button></div><div class="session-note"><textarea data-note="${i}" rows="2" placeholder="Exercise note...">${escapeHtml(x.note||'')}</textarea></div><button type="button" class="text-btn danger-text" data-removeexercise="${i}">REMOVE EXERCISE</button></div></details>`}).join('')}</div>
+  <section class="section active-workout-actions"><button type="button" class="secondary" data-active-action="add-exercise">+ ADD EXERCISE</button><button type="button" class="primary" data-active-action="finish">FINISH WORKOUT</button><button type="button" class="danger-btn" data-active-action="cancel">CANCEL WORKOUT</button></section>`);
+ const screen=$('.screen');if(!screen)return;startStrengthClock(s);const back=$('[data-back]');if(back)back.onclick=()=>go('home');
+ screen.oninput=e=>{const target=e.target;if(target.matches('[data-weight]')){const[i,j]=target.dataset.weight.split(':').map(Number);if(s.items[i]?.sets?.[j]){s.items[i].sets[j].weight=target.value;save()}}else if(target.matches('[data-reps]')){const[i,j]=target.dataset.reps.split(':').map(Number);if(s.items[i]?.sets?.[j]){s.items[i].sets[j].reps=target.value;save()}}else if(target.matches('[data-note]')){const i=+target.dataset.note;if(s.items[i]){s.items[i].note=target.value;save()}}};
+ screen.onclick=e=>{const button=e.target.closest('button');if(!button)return;
+  if(button.dataset.activeAction==='finish'){button.disabled=true;button.textContent='FINISHING…';finishSession();return}if(button.dataset.activeAction==='cancel'){confirmCancel();return}
+  if(button.dataset.activeAction==='add-exercise'){openExercisePicker(s.type,ex=>{const rx=defaultExercisePrescription(ex,s.type);s.items.push({name:ex.name,muscle:ex.muscle||'',equipment:ex.equipment||'',targetReps:rx.reps,note:'',sets:Array.from({length:rx.sets},()=>({weight:'',reps:'',done:false}))});save();active()});return}
+  if(button.dataset.check){const[i,j]=button.dataset.check.split(':').map(Number),set=s.items[i]?.sets?.[j];if(set){activeExerciseOpen=i;set.done=!set.done;save();button.classList.toggle('done',set.done);button.textContent=set.done?'✓':'○';button.setAttribute('aria-pressed',set.done?'true':'false');button.closest('.set-row')?.classList.toggle('set-done',set.done);updateActiveProgressUI(s)}return}
   if(button.dataset.addset!==undefined){const i=+button.dataset.addset;if(s.items[i]){activeExerciseOpen=i;s.items[i].sets.push({weight:'',reps:'',done:false});save();active()}return}
-  if(button.dataset.removeset!==undefined){const i=+button.dataset.removeset,x=s.items[i];if(x&&x.sets.length>1){activeExerciseOpen=i;x.sets.pop();save();active()}return}
-  if(button.dataset.removeexercise!==undefined){const i=+button.dataset.removeexercise;if(s.items.length<=1){toast('Keep at least one exercise');return}s.items.splice(i,1);activeExerciseOpen=Math.max(0,Math.min(activeExerciseOpen,s.items.length-1));save();active()}
+  if(button.dataset.removeset!==undefined){const i=+button.dataset.removeset,x=s.items[i];if(x&&x.sets.length>1){activeExerciseOpen=i;const removed=x.sets.pop();save();active();actionToast('Set removed','UNDO',()=>{if(data.activeSession?.id===s.id&&data.activeSession.items[i]){data.activeSession.items[i].sets.push(removed);save();active()}})}return}
+  if(button.dataset.removeexercise!==undefined){const i=+button.dataset.removeexercise;if(s.items.length<=1){toast('Keep at least one exercise');return}const removed=s.items.splice(i,1)[0];activeExerciseOpen=Math.max(0,Math.min(activeExerciseOpen,s.items.length-1));save();active();actionToast(`${removed.name} removed`,'UNDO',()=>{if(data.activeSession?.id===s.id){data.activeSession.items.splice(i,0,removed);save();active()}})}
  };
  $$('.session-exercise').forEach(details=>details.addEventListener('toggle',()=>{if(details.open)activeExerciseOpen=+details.dataset.exerciseIndex}));
 }
@@ -775,8 +821,12 @@ function openCardioFinishSheet(s){
  $('#cardio-save-finish').onclick=()=>{const mins=Math.max(1,Math.round(Number($('#cardio-finish-duration').value)||durationMin));const distance=Math.max(0,Number($('#cardio-finish-distance').value)||0);closeSheet();finalizeSession({durationMin:mins,distance:distance||0})};
 }
 function finishSession(){const s=data.activeSession;if(!s)return;if(s.type==='cardio')return openCardioFinishSheet(s);finalizeSession()}
-function finalizeSession(overrides={}){const s=data.activeSession;if(!s)return;const durationMin=overrides.durationMin||sessionDurationMinutes(s);let doneSets=0,totalSets=0;if(s.type!=='cardio')s.items.forEach(x=>x.sets.forEach(z=>{totalSets++;if(z.done)doneSets++}));const comment=completionSass(s,durationMin,doneSets,totalSets);const finished={...s,...overrides,durationMin,doneSets,totalSets,finishedAt:Date.now(),completed:true};data.sessions.push(finished);data.activeSession=null;recomputePRHistory({notifyNew:true});save();clearInterval(cardioTimer);stopWorkoutClock();const completionText=totalSets?` · ${doneSets}/${totalSets} sets`:finished.distance?` · ${finished.distance} km`:'';openSheet(`<div style="text-align:center;padding:8px 0"><p class="eyebrow">Workout complete</p><h2 style="font-size:30px;margin:4px 0">${escapeHtml(comment)}</h2><p class="subtle">${durationMin} min${completionText}</p><div class="sheet-actions"><button class="primary" id="finish-home">BACK TO HOME</button><button class="secondary" id="finish-progress">VIEW PROGRESS</button></div></div>`);$('#finish-home').onclick=()=>{closeSheet();go('home')};$('#finish-progress').onclick=()=>{closeSheet();go('progress')}}
-function confirmCancel(){openSheet(`<div class="sheet-head"><div><p class="eyebrow">Cancel workout?</p><h2>Your current log will be removed.</h2></div><button class="sheet-close" data-close>×</button></div><div class="sheet-actions"><button class="danger-btn" id="really-cancel">DELETE ACTIVE WORKOUT</button><button class="secondary" data-close>KEEP TRAINING</button></div>`);$('#really-cancel').onclick=()=>{data.activeSession=null;save();clearInterval(cardioTimer);stopWorkoutClock();closeSheet();go('home')}}
+function undoFinishedSession(finished){
+ if(data.activeSession||!(data.sessions||[]).some(x=>x.id===finished.id))return toast('Workout can no longer be reopened');
+ data.sessions=data.sessions.filter(x=>x.id!==finished.id);const restored=structuredClone(finished);delete restored.finishedAt;delete restored.durationMin;delete restored.doneSets;delete restored.totalSets;delete restored.completed;delete restored.prs;data.activeSession=restored;recomputePRHistory({notifyNew:false});save();go('active');toast('Workout reopened');
+}
+function finalizeSession(overrides={}){const s=data.activeSession;if(!s)return;const durationMin=overrides.durationMin||sessionDurationMinutes(s);let doneSets=0,totalSets=0;if(s.type!=='cardio')s.items.forEach(x=>x.sets.forEach(z=>{totalSets++;if(z.done)doneSets++}));const comment=completionSass(s,durationMin,doneSets,totalSets);const finished={...s,...overrides,durationMin,doneSets,totalSets,finishedAt:Date.now(),completed:true};if((data.sessions||[]).some(x=>x.id===finished.id)){data.activeSession=null;save();return go('home')}data.sessions.push(finished);data.activeSession=null;recomputePRHistory({notifyNew:true});save();clearInterval(cardioTimer);stopWorkoutClock();const completionText=totalSets?` · ${doneSets}/${totalSets} sets`:finished.distance?` · ${finished.distance} km`:'';const next=nextTimeSummary(finished),coachTips=sessionCoachSummary(finished);openSheet(`<div style="text-align:center;padding:8px 0"><p class="eyebrow">Workout complete</p><h2 style="font-size:30px;margin:4px 0">${escapeHtml(comment)}</h2><p class="subtle">${durationMin} min${completionText}</p>${next.length?`<div class="next-time-card"><p class="eyebrow">NEXT TIME</p>${next.map(x=>`<div><span><strong>${escapeHtml(x.name)}</strong><small>${escapeHtml(x.current)}</small></span><b>${escapeHtml(x.next)}</b></div>`).join('')}</div>`:''}<div class="post-coach-insights"><p class="eyebrow">GAYM COACH</p>${coachTips.map(x=>`<p>${escapeHtml(x)}</p>`).join('')}</div><div class="sheet-actions"><button class="primary" id="finish-home">BACK TO HOME</button><button class="secondary" id="finish-progress">VIEW PROGRESS</button></div></div>`);$('#finish-home').onclick=()=>{closeSheet();go('home');actionToast('Workout completed','UNDO',()=>undoFinishedSession(finished))};$('#finish-progress').onclick=()=>{closeSheet();go('progress')}}
+
 function exerciseLog(){
  const map=new Map();
  data.sessions.filter(s=>s.type!=='cardio'&&s.completed!==false).forEach(session=>{
@@ -797,7 +847,7 @@ function bestSetEver(ex){return ex.sessions.flatMap(s=>s.sets.map(set=>({...set,
 function exerciseTrendPoints(ex){const values=ex.sessions.slice(-10).map(s=>bestSetFromSession(s)?.score||0).filter(Boolean);if(!values.length)return '';const min=Math.min(...values),max=Math.max(...values),range=Math.max(1,max-min);return values.map((v,i)=>`${values.length===1?60:i*(120/(values.length-1))},${108-((v-min)/range)*88}`).join(' ')}
 function progress(){
  const exercises=exerciseLog(),total=data.sessions.length,streak=calcStreak(),latest=data.measurements.at(-1)?.weight??data.profile.weight;
- shell(`${header()}<h1 class="page-title">Progress</h1><p class="subtle">Progress belongs to the exercise. Track what actually got stronger, rep by rep.</p><div class="tabs" style="margin-top:15px"><button class="tab active">Exercises</button><button class="tab" data-progress-history>History</button><button class="tab" data-progress-body>Body</button></div><section class="section"><div class="metric-grid"><div class="metric"><span>Workouts</span><strong>${total}</strong></div><div class="metric"><span>Streak</span><strong>${streak}</strong></div><div class="metric"><span>Exercises tracked</span><strong>${exercises.length}</strong></div><div class="metric"><span>Body weight</span><strong>${Number(latest).toFixed(1)} kg</strong></div></div></section><section class="section"><div class="section-head"><h2>Exercise progress</h2><span class="eyebrow">BEST SET / SESSION</span></div><div class="field exercise-progress-search"><input id="progress-search" placeholder="Search exercise or muscle..."></div><div class="list" id="exercise-progress-list"></div></section>`);
+ shell(`${header()}<h1 class="page-title">Progress</h1><p class="subtle">Progress belongs to the exercise. Track what actually got stronger, rep by rep.</p><div class="tabs" style="margin-top:15px"><button class="tab active">Exercises</button><button class="tab" data-progress-history>History</button><button class="tab" data-progress-body>Body</button></div><section class="section"><div class="metric-grid"><div class="metric"><span>Workouts</span><strong>${total}</strong></div><div class="metric"><span>Streak</span><strong>${streak}</strong></div><div class="metric"><span>Exercises tracked</span><strong>${exercises.length}</strong></div><div class="metric"><span>Body weight</span><strong>${Number(latest).toFixed(1)} kg</strong></div></div></section>${(()=>{const w=weekCoachReview();return `<section class="section"><article class="card weekly-coach"><div class="coach-card-head"><span class="coach-label">YOUR WEEK</span><span class="coach-status">COACH</span></div><strong>${escapeHtml(w.summary)}</strong><div class="weekly-coach-grid"><div><span>WIN</span><p>${escapeHtml(w.win)}</p></div><div><span>WATCH</span><p>${escapeHtml(w.watch)}</p></div><div><span>NEXT</span><p>${escapeHtml(w.next)}</p></div></div></article></section>`})()}<section class="section"><div class="section-head"><h2>Exercise progress</h2><span class="eyebrow">BEST SET / SESSION</span></div><div class="field exercise-progress-search"><input id="progress-search" placeholder="Search exercise or muscle..."></div><div class="list" id="exercise-progress-list"></div></section>`);
  function paint(q=''){
   const query=q.trim().toLowerCase();
   const filtered=exercises.filter(ex=>`${ex.name} ${ex.muscle} ${ex.equipment}`.toLowerCase().includes(query));
