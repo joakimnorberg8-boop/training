@@ -7,7 +7,7 @@ const defaults={
  customWorkouts:[],customPrograms:[],sessions:[],measurements:[],nutrition:[],recipeFavorites:[],customRecipes:[],
  planned:[], activeSession:null, profileCreated:false, sassSeed:null, dailySass:{date:null,text:''},
  notificationSettings:{workout:true,nutrition:true,progress:true,dailySass:true,unhinged:true,dailyTime:'09:00',nutritionTime:'19:00'},
- notifications:[], notificationMeta:{dailySassDate:null,nutritionDate:null,absenceDate:null,streakMilestone:null}, unicornEvent:null, coachCheckins:[], bottomCheckins:[], nightOut:null
+ notifications:[], notificationMeta:{dailySassDate:null,nutritionDate:null,absenceDate:null,streakMilestone:null}, unicornEvent:null, coachCheckins:[], bottomCheckins:[], nightOut:null, beginnerEquipment:['dumbbells','barbell','mat']
 };
 
 const sass={
@@ -588,11 +588,12 @@ function openCustomProgramMenu(id){
 function workout(){
  const customPrograms=data.customPrograms||[];
  const recovery=muscleRecovery();
- shell(`${header()}<h1 class="page-title">Workout</h1><p class="subtle">Strength lives here. Log cardio results in seconds, or jump into a GAYM program.</p>${recovery.length?`<section class="section recovery-strip"><div class="section-head"><h2>Last trained</h2><span class="eyebrow">RECOVERY SNAPSHOT</span></div><div class="recovery-chips">${recovery.map(r=>`<span class="recovery-chip ${r.days===0?'today':''}"><strong>${escapeHtml(r.muscle)}</strong><small>${r.days===0?'today':r.days===1?'1 day ago':`${r.days} days ago`}</small></span>`).join('')}</div></section>`:''}
+ shell(`${header()}<h1 class="page-title">Workout</h1><div class="tabs workout-mode-tabs"><button class="tab active">MY TRAINING</button><button class="tab" id="workout-beginner-tab">BEGINNER</button></div><p class="subtle">Strength lives here. Log cardio results in seconds, or jump into a GAYM program.</p>${recovery.length?`<section class="section recovery-strip"><div class="section-head"><h2>Last trained</h2><span class="eyebrow">RECOVERY SNAPSHOT</span></div><div class="recovery-chips">${recovery.map(r=>`<span class="recovery-chip ${r.days===0?'today':''}"><strong>${escapeHtml(r.muscle)}</strong><small>${r.days===0?'today':r.days===1?'1 day ago':`${r.days} days ago`}</small></span>`).join('')}</div></section>`:''}
  <section class="section"><p class="eyebrow">Choose workout type</p><div class="builder-type-grid"><button class="type-card active" data-type="strength">${icons.workout}<strong>Strength</strong><small>Sets, reps & weight</small></button><button class="type-card cardio-log-card" id="log-cardio"><span style="font-size:23px;color:var(--cyan)">↗</span><strong>Log cardio</strong><small>Time, distance & intensity</small></button><button class="type-card" data-type="rehab"><span style="font-size:21px;color:var(--lime);font-weight:900">R</span><strong>Rehab</strong><small>Controlled sets & notes</small></button></div></section>
  <section class="section"><p class="eyebrow">Ready-made programs</p><div class="builder-type-grid program-type-grid"><button class="type-card kai-type-card" data-program="kai"><span class="kai-mark">K</span><strong>Kai</strong><small>Ready-made 5-day split</small></button><button class="type-card raymond-type-card" data-program="raymond"><span class="raymond-mark">R</span><strong>Raymond’s Big Gay Arms</strong><small>Biceps, triceps & sleeve problems</small></button><button class="type-card jocke-type-card" data-program="jocke"><span class="jocke-mark">J</span><strong>Jocke</strong><small>Push · Pull · Legs · Upper · Lower + Arms</small></button></div></section>
  <section class="section"><div class="section-head"><div><p class="eyebrow">Your programs</p><h2>Custom Programs</h2></div><button class="text-btn" id="new-program">+ CREATE</button></div><div class="custom-program-grid">${customPrograms.length?customPrograms.map(p=>`<button class="type-card custom-program-card" data-custom-program="${p.id}"><span class="custom-program-mark">P</span><strong>${escapeHtml(p.name)}</strong><small>${p.days?.length||0} days · Your plan</small></button>`).join(''):`<button class="type-card create-program-card" id="empty-program-create"><span class="custom-program-mark">+</span><strong>Create your program</strong><small>Plan strength, rehab & rest day by day</small></button>`}</div></section>
  <section class="section"><div class="section-head"><h2>Your workouts</h2><button class="text-btn" id="new-workout">+ NEW</button></div><div class="tabs" id="workout-tabs"><button class="tab active" data-filter="all">All</button><button class="tab" data-filter="strength">Strength</button><button class="tab" data-filter="rehab">Rehab</button></div><div class="list" id="workout-list" style="margin-top:11px"></div></section>`);
+ const beginnerTab=$('#workout-beginner-tab');if(beginnerTab)beginnerTab.onclick=beginnerWorkout;
  let chosen='strength',filter='all';
  function paint(){
   const arr=data.customWorkouts.filter(w=>w.type!=='cardio'&&(filter==='all'||w.type===filter));
@@ -607,6 +608,261 @@ function workout(){
  if($('#empty-program-create'))$('#empty-program-create').onclick=()=>openProgramBuilder();
  $('#new-workout').onclick=()=>openBuilder(chosen);
  $$('[data-filter]').forEach(b=>b.onclick=()=>{filter=b.dataset.filter;$$('[data-filter]').forEach(x=>x.classList.toggle('active',x===b));paint()});
+}
+
+
+const BEGINNER_EXERCISES={
+ 'barbell-back-squat':{
+  name:'Barbell Back Squat',muscle:'Quads / glutes / adductors',equipment:'Barbell + plates',pattern:'squat',sets:3,reps:'8-12',
+  setup:['Rest the bar securely across your upper back, not directly on the neck.','Start around shoulder-width with the whole foot planted.','Take a breath and brace your trunk before you descend.'],
+  move:['Sit down and slightly back while bending the knees.','Let the knees follow the direction of your toes.','Descend only as far as you can control, then stand up with hips and chest rising together.'],
+  feel:'Mainly the front of the thighs and glutes. Your trunk works to keep you stable.',
+  mistakes:['Bar resting directly on the neck','Heels lifting or feet losing contact','Knees collapsing inward','Rounding the lower back or losing torso control'],
+  easier:['goblet-squat','dumbbell-squat'],alternatives:['bulgarian-split-squat','reverse-lunge'],
+  note:'No rack? Only use a load you can get into and out of position safely.'
+ },
+ 'goblet-squat':{
+  name:'Goblet Squat',muscle:'Quads / glutes',equipment:'Dumbbell',pattern:'squat',sets:3,reps:'8-12',
+  setup:['Hold one dumbbell close to your chest.','Stand about shoulder-width with your whole foot planted.','Brace your trunk and keep the weight close.'],
+  move:['Lower under control by bending hips and knees.','Keep knees tracking with your toes.','Stand back up without bouncing out of the bottom.'],
+  feel:'Front of the thighs and glutes. You should feel stable through the whole foot.',
+  mistakes:['Letting the weight drift away from the chest','Heels lifting','Knees collapsing inward'],
+  easier:['dumbbell-squat'],alternatives:['barbell-back-squat','bulgarian-split-squat']
+ },
+ 'dumbbell-squat':{
+  name:'Dumbbell Squat',muscle:'Quads / glutes',equipment:'Dumbbells',pattern:'squat',sets:3,reps:'8-12',
+  setup:['Hold the dumbbells comfortably at your sides.','Stand around shoulder-width.','Brace before each set.'],
+  move:['Lower with control while keeping the whole foot down.','Let knees follow the toes.','Stand tall without rushing.'],
+  feel:'Front thighs and glutes.',
+  mistakes:['Rushing the bottom position','Heels lifting','Losing trunk control'],
+  easier:[],alternatives:['goblet-squat','reverse-lunge']
+ },
+ 'bulgarian-split-squat':{
+  name:'Bulgarian Split Squat',muscle:'Quads / glutes',equipment:'Dumbbells + stable support',pattern:'lunge',sets:3,reps:'8-12 / leg',
+  setup:['Place the rear foot on a low, stable support.','Set the front foot far enough forward that you can descend without losing balance.','Start bodyweight if the setup feels unfamiliar.'],
+  move:['Lower the back knee toward the floor under control.','Keep the front foot planted and front knee following the toes.','Push through the front leg to return.'],
+  feel:'Mostly the front thigh and glute of the working leg.',
+  mistakes:['Using an unstable support','Front heel lifting','Dropping too quickly','Letting the front knee collapse inward'],
+  easier:['reverse-lunge'],alternatives:['goblet-squat','barbell-back-squat']
+ },
+ 'reverse-lunge':{
+  name:'Reverse Lunge',muscle:'Quads / glutes',equipment:'Bodyweight or dumbbells',pattern:'lunge',sets:3,reps:'8-12 / leg',
+  setup:['Stand tall with feet about hip-width apart.','Start without weight until the step feels stable.'],
+  move:['Step one foot backward and lower under control.','Keep most of your balance through the front foot.','Push through the front leg to return to standing.'],
+  feel:'Front-leg quads and glutes.',
+  mistakes:['Taking too short a step','Losing balance by rushing','Front knee collapsing inward'],
+  easier:[],alternatives:['bulgarian-split-squat','goblet-squat']
+ },
+ 'barbell-rdl':{
+  name:'Barbell Romanian Deadlift',muscle:'Hamstrings / glutes',equipment:'Barbell + plates',pattern:'hinge',sets:3,reps:'8-12',
+  setup:['Stand about hip-width with the bar in front of your thighs.','Keep a small bend in the knees and brace your trunk.','Keep shoulders controlled and spine neutral.'],
+  move:['Push the hips backward rather than squatting down.','Keep the bar close to your legs.','Stop when you feel a strong hamstring stretch while your back position stays controlled, then drive the hips forward to stand.'],
+  feel:'A stretch and tension through the hamstrings, with the glutes working as you stand.',
+  mistakes:['Rounding the lower back','Bending the knees so much it becomes a squat','Letting the bar drift away from the legs','Going lower after the back starts to round'],
+  easier:['dumbbell-rdl'],alternatives:['glute-bridge']
+ },
+ 'dumbbell-rdl':{
+  name:'Dumbbell Romanian Deadlift',muscle:'Hamstrings / glutes',equipment:'Dumbbells',pattern:'hinge',sets:3,reps:'8-12',
+  setup:['Stand hip-width holding the dumbbells close to your thighs.','Keep a slight knee bend and brace your trunk.'],
+  move:['Push your hips backward and keep the dumbbells close to your legs.','Stop when the hamstrings feel stretched and your spine is still controlled.','Drive the hips forward to stand.'],
+  feel:'Hamstrings during the lowering phase and glutes as you stand.',
+  mistakes:['Turning it into a squat','Rounding the back','Using momentum'],
+  easier:['glute-bridge'],alternatives:['barbell-rdl']
+ },
+ 'glute-bridge':{
+  name:'Glute Bridge',muscle:'Glutes / hamstrings',equipment:'Mat + optional weight',pattern:'bridge',sets:3,reps:'10-15',
+  setup:['Lie on your back with knees bent and feet planted.','Place feet where you can keep them flat as the hips rise.'],
+  move:['Brace lightly and squeeze the glutes to lift the hips.','Stop when your hips are extended without arching hard through the lower back.','Lower under control.'],
+  feel:'Primarily the glutes; some hamstring work is normal.',
+  mistakes:['Overarching the lower back','Pushing mainly from the toes','Bouncing through repetitions'],
+  easier:[],alternatives:['dumbbell-rdl','barbell-rdl']
+ },
+ 'dumbbell-floor-press':{
+  name:'Dumbbell Floor Press',muscle:'Chest / triceps',equipment:'Dumbbells + mat',pattern:'press',sets:3,reps:'8-12',
+  setup:['Lie on your back with knees bent and feet planted.','Hold dumbbells over the chest with wrists stacked over elbows.','Keep shoulders controlled against the floor.'],
+  move:['Lower until the upper arms gently contact the floor.','Pause briefly rather than bouncing.','Press the dumbbells back up under control.'],
+  feel:'Chest and triceps. The shoulders should feel stable rather than pinched.',
+  mistakes:['Bouncing elbows off the floor','Wrists folding backward','Letting elbows flare aggressively'],
+  easier:[],alternatives:['push-up','dumbbell-shoulder-press']
+ },
+ 'push-up':{
+  name:'Push-Up',muscle:'Chest / triceps / shoulders',equipment:'Bodyweight',pattern:'press',sets:3,reps:'6-12',
+  setup:['Hands slightly wider than shoulder-width as a starting point.','Keep head, trunk and hips in one controlled line.','Use an elevated surface if floor push-ups are too difficult.'],
+  move:['Lower the chest toward the floor while keeping the body controlled.','Press the floor away to return.'],
+  feel:'Chest, triceps and front shoulders.',
+  mistakes:['Hips sagging','Head reaching forward','Elbows flaring straight out'],
+  easier:[],alternatives:['dumbbell-floor-press']
+ },
+ 'one-arm-db-row':{
+  name:'One-Arm Dumbbell Row',muscle:'Back / biceps',equipment:'Dumbbell + stable support',pattern:'row',sets:3,reps:'8-12 / arm',
+  setup:['Support yourself with the free hand on something stable.','Keep the torso controlled and spine neutral.','Let the working arm hang naturally.'],
+  move:['Pull the dumbbell toward the side of your torso.','Keep the shoulder away from the ear and avoid twisting the body.','Lower under control.'],
+  feel:'Upper back and lat on the working side; biceps also assist.',
+  mistakes:['Rotating the torso to lift the weight','Shrugging the shoulder','Jerking the dumbbell upward'],
+  easier:[],alternatives:['barbell-row','two-arm-db-row']
+ },
+ 'two-arm-db-row':{
+  name:'Two-Arm Dumbbell Row',muscle:'Back / biceps',equipment:'Dumbbells',pattern:'row',sets:3,reps:'8-12',
+  setup:['Hinge at the hips with a slight knee bend.','Brace and keep your spine controlled.','Let both dumbbells hang below the shoulders.'],
+  move:['Pull both dumbbells toward your torso.','Keep elbows controlled and shoulders away from ears.','Lower without losing the hinge.'],
+  feel:'Upper back and lats; biceps assist.',
+  mistakes:['Standing up between reps','Rounding the back','Using momentum'],
+  easier:['one-arm-db-row'],alternatives:['barbell-row']
+ },
+ 'barbell-row':{
+  name:'Bent-Over Barbell Row',muscle:'Back / biceps',equipment:'Barbell + plates',pattern:'row',sets:3,reps:'8-12',
+  setup:['Stand with feet about hip-width and hinge at the hips.','Keep a slight knee bend, brace your trunk and hold the bar with control.'],
+  move:['Pull the bar toward the lower ribs/upper abdomen.','Avoid using the hips to throw the bar upward.','Lower under control while maintaining your torso position.'],
+  feel:'Upper back and lats, with biceps helping.',
+  mistakes:['Rounding the back','Jerking with the hips','Shrugging toward the ears'],
+  easier:['one-arm-db-row'],alternatives:['two-arm-db-row']
+ },
+ 'dumbbell-shoulder-press':{
+  name:'Dumbbell Shoulder Press',muscle:'Shoulders / triceps',equipment:'Dumbbells',pattern:'overhead',sets:3,reps:'8-12',
+  setup:['Stand or sit tall with dumbbells around shoulder height.','Brace your trunk and keep wrists stacked over forearms.'],
+  move:['Press overhead under control.','Finish with arms overhead without aggressively arching the lower back.','Lower back to shoulder level.'],
+  feel:'Shoulders and triceps.',
+  mistakes:['Overarching the lower back','Using leg drive when the goal is a strict press','Wrists folding backward'],
+  easier:[],alternatives:['dumbbell-floor-press']
+ },
+ 'lateral-raise':{
+  name:'Dumbbell Lateral Raise',muscle:'Shoulders / side delts',equipment:'Dumbbells',pattern:'raise',sets:2,reps:'12-15',
+  setup:['Stand tall with light dumbbells at your sides.','Keep elbows softly bent and shoulders relaxed.'],
+  move:['Raise the arms out to the sides under control.','Stop around shoulder height or earlier if that feels better.','Lower slowly.'],
+  feel:'The outside of the shoulders.',
+  mistakes:['Shrugging','Swinging the weights','Choosing a weight that forces momentum'],
+  easier:[],alternatives:['dumbbell-shoulder-press']
+ },
+ 'dumbbell-curl':{
+  name:'Dumbbell Curl',muscle:'Biceps',equipment:'Dumbbells',pattern:'curl',sets:2,reps:'10-15',
+  setup:['Stand tall with arms by your sides.','Keep elbows close to the torso.'],
+  move:['Bend the elbows to curl the dumbbells upward.','Keep the upper arms mostly still.','Lower under control.'],
+  feel:'Front of the upper arms.',
+  mistakes:['Swinging the body','Driving elbows forward','Dropping the weight quickly'],
+  easier:[],alternatives:['hammer-curl']
+ },
+ 'hammer-curl':{
+  name:'Hammer Curl',muscle:'Biceps / forearms',equipment:'Dumbbells',pattern:'curl',sets:2,reps:'10-15',
+  setup:['Stand tall with palms facing each other.','Keep elbows close to your sides.'],
+  move:['Curl the dumbbells upward without rotating the wrists.','Keep the upper arms quiet.','Lower under control.'],
+  feel:'Front of the upper arms and some forearm work.',
+  mistakes:['Swinging the torso','Letting elbows travel far forward','Dropping the dumbbells quickly'],
+  easier:[],alternatives:['dumbbell-curl']
+ },
+ 'leg-press':{
+  name:'Leg Press',muscle:'Quads / glutes',equipment:'Leg press machine',pattern:'squat',sets:3,reps:'8-12',
+  setup:['Place feet comfortably on the platform and keep your back supported.','Start with a light load and a range you can control.'],
+  move:['Lower the platform under control.','Keep knees tracking with the feet.','Press back without forcefully locking the knees.'],
+  feel:'Front thighs and glutes.',
+  mistakes:['Hips rolling off the pad','Knees collapsing inward','Using more depth than you can control'],
+  easier:[],alternatives:['goblet-squat','barbell-back-squat']
+ },
+ 'chest-press-machine':{
+  name:'Chest Press Machine',muscle:'Chest / triceps',equipment:'Chest press machine',pattern:'press',sets:3,reps:'8-12',
+  setup:['Adjust the seat so the handles sit around mid-chest level.','Keep your back supported and wrists neutral.'],
+  move:['Press the handles forward under control.','Return slowly until you reach a comfortable chest stretch.'],
+  feel:'Chest and triceps.',
+  mistakes:['Shoulders shrugging forward','Seat set too high or low','Letting the weight slam back'],
+  easier:[],alternatives:['dumbbell-floor-press','push-up']
+ },
+ 'lat-pulldown':{
+  name:'Lat Pulldown',muscle:'Back / biceps',equipment:'Cable pulldown',pattern:'pull',sets:3,reps:'8-12',
+  setup:['Sit securely with thighs supported.','Take a comfortable grip and keep the chest tall.','Set the shoulders down away from the ears.'],
+  move:['Pull the bar toward the upper chest without swinging backward.','Control the return until the arms are long again.'],
+  feel:'Lats/upper back with biceps helping.',
+  mistakes:['Leaning far backward','Pulling behind the neck','Shrugging through the movement'],
+  easier:[],alternatives:['one-arm-db-row','barbell-row']
+ },
+ 'leg-curl':{
+  name:'Leg Curl',muscle:'Hamstrings',equipment:'Leg curl machine',pattern:'curl-leg',sets:3,reps:'10-15',
+  setup:['Adjust the machine so the knee joint lines up comfortably with the machine pivot.','Set the pad securely against the lower leg.'],
+  move:['Curl the heels toward you under control.','Pause briefly and return slowly.'],
+  feel:'Back of the thighs.',
+  mistakes:['Lifting the hips away from the pad','Using momentum','Letting the stack slam down'],
+  easier:[],alternatives:['dumbbell-rdl','barbell-rdl']
+ }
+};
+const BEGINNER_PROGRAMS={
+ homeA:{name:'Beginner Home A',tag:'HOME · A',description:'Full body · dumbbells + barbell · about 40–50 min',items:['barbell-back-squat','dumbbell-floor-press','one-arm-db-row','barbell-rdl','lateral-raise']},
+ homeB:{name:'Beginner Home B',tag:'HOME · B',description:'Full body · dumbbells + barbell · about 40–50 min',items:['bulgarian-split-squat','dumbbell-shoulder-press','barbell-row','glute-bridge','dumbbell-curl']},
+ gym:{name:'Beginner Gym Full Body',tag:'GYM',description:'Simple machines + basic movement patterns · about 40 min',items:['leg-press','chest-press-machine','lat-pulldown','leg-curl','lateral-raise']}
+};
+function beginnerItem(key){const g=BEGINNER_EXERCISES[key];return g?{name:g.name,muscle:g.muscle,equipment:g.equipment,sets:g.sets,reps:g.reps,beginnerGuideKey:key}:null}
+function currentBeginnerEquipment(){return Array.isArray(data.beginnerEquipment)&&data.beginnerEquipment.length?data.beginnerEquipment:['dumbbells','barbell','mat']}
+function beginnerEquipmentSupports(key){
+ const g=BEGINNER_EXERCISES[key];if(!g)return false;const e=g.equipment.toLowerCase(),have=currentBeginnerEquipment();
+ if(/machine|cable/.test(e))return true;
+ if(e.includes('barbell')&&!have.includes('barbell'))return false;
+ if(e.includes('dumbbell')&&!have.includes('dumbbells'))return false;
+ if(e.includes('mat')&&!have.includes('mat'))return false;
+ if(e.includes('bench')&&!have.includes('bench'))return false;
+ if(e.includes('band')&&!have.includes('bands'))return false;
+ if(e.includes('pull-up')&&!have.includes('pullup'))return false;
+ return true;
+}
+function beginnerHomeChoice(key,seen=new Set()){
+ if(beginnerEquipmentSupports(key))return key;if(seen.has(key))return key;seen.add(key);
+ const g=BEGINNER_EXERCISES[key],candidates=[...(g?.easier||[]),...(g?.alternatives||[])];
+ for(const alt of candidates){if(beginnerEquipmentSupports(alt))return alt}
+ for(const alt of candidates){const nested=beginnerHomeChoice(alt,seen);if(beginnerEquipmentSupports(nested))return nested}
+ return key;
+}
+function openBeginnerEquipment(){
+ const options=[['dumbbells','Dumbbells'],['barbell','Barbell + plates'],['mat','Exercise mat'],['bench','Bench'],['bands','Resistance bands'],['pullup','Pull-up bar']],selected=new Set(currentBeginnerEquipment());
+ openSheet(`<div class="sheet-head"><div><p class="eyebrow">Home setup</p><h2>What do you have?</h2></div><button class="sheet-close" data-close>×</button></div><p class="subtle">GAYM uses this only to choose sensible home alternatives. You can change it whenever your setup changes.</p><div class="beginner-equipment-list">${options.map(([id,label])=>`<label><input type="checkbox" value="${id}" ${selected.has(id)?'checked':''}><span>${label}</span></label>`).join('')}</div><button class="primary" id="save-beginner-equipment">SAVE HOME SETUP</button>`);
+ $('#save-beginner-equipment').onclick=()=>{const picked=$$('.beginner-equipment-list input:checked').map(x=>x.value);if(!picked.length)return toast('Choose at least one thing you can train with');data.beginnerEquipment=picked;save();closeSheet();beginnerWorkout();toast('Home setup updated')};
+}
+function startBeginnerProgram(key){
+ const p=BEGINNER_PROGRAMS[key];if(!p)return;
+ const keys=key.startsWith('home')?p.items.map(beginnerHomeChoice):p.items;
+ startWorkoutTemplate({id:`beginner-${key}`,name:p.name,type:'strength',program:'Beginner',programDay:key,beginner:true,notes:'Beginner guided workout',items:keys.map(beginnerItem).filter(Boolean)});
+}
+function beginnerWorkout(){
+ shell(`${header()}<h1 class="page-title">Workout</h1><div class="tabs workout-mode-tabs"><button class="tab" id="beginner-back">MY TRAINING</button><button class="tab active">BEGINNER</button></div>
+ <section class="beginner-hero"><span class="eyebrow">START HERE</span><h2>New to strength training?</h2><p>GAYM will explain the words, the setup and what each exercise is supposed to train. You still use the normal workout logger underneath.</p><button class="primary" id="beginner-basics">TEACH ME THE BASICS</button></section>
+ <section class="section"><div class="section-head"><div><p class="eyebrow">Home workouts</p><h2>Built for your setup</h2></div><button class="text-btn" id="beginner-equipment">HOME SETUP</button></div><div class="beginner-setup-summary"><span>${currentBeginnerEquipment().map(x=>x==='dumbbells'?'Dumbbells':x==='barbell'?'Barbell':x==='mat'?'Mat':x==='pullup'?'Pull-up bar':x[0].toUpperCase()+x.slice(1)).join(' · ')}</span><b>3 DAYS / WEEK</b></div><p class="subtle">Alternate A and B: week 1 A · B · A, week 2 B · A · B. If your equipment is missing, GAYM swaps to a suitable alternative when the workout starts.</p><div class="beginner-program-grid">${['homeA','homeB'].map(k=>{const p=BEGINNER_PROGRAMS[k];return `<article class="card beginner-program-card"><span class="eyebrow">${p.tag}</span><h3>${p.name}</h3><p>${p.description}</p><div class="beginner-ex-list">${p.items.map((x,i)=>`<button type="button" data-beginner-guide="${x}"><span>${i+1}</span><span><strong>${escapeHtml(BEGINNER_EXERCISES[x].name)}</strong><small>${escapeHtml(BEGINNER_EXERCISES[x].sets+' × '+BEGINNER_EXERCISES[x].reps)}</small></span><span class="chev">›</span></button>`).join('')}</div><button class="primary" data-start-beginner="${k}">START ${k==='homeA'?'A':'B'}</button></article>`}).join('')}</div></section>
+ <section class="section"><div class="section-head"><div><p class="eyebrow">Beginner gym</p><h2>Keep it simple</h2></div><span class="beginner-pill">FULL BODY</span></div><article class="card beginner-program-card"><span class="eyebrow">GYM</span><h3>${BEGINNER_PROGRAMS.gym.name}</h3><p>${BEGINNER_PROGRAMS.gym.description}</p><div class="beginner-ex-list">${BEGINNER_PROGRAMS.gym.items.map((x,i)=>`<button type="button" data-beginner-guide="${x}"><span>${i+1}</span><span><strong>${escapeHtml(BEGINNER_EXERCISES[x].name)}</strong><small>${escapeHtml(BEGINNER_EXERCISES[x].sets+' × '+BEGINNER_EXERCISES[x].reps)}</small></span><span class="chev">›</span></button>`).join('')}</div><button class="primary" data-start-beginner="gym">START GYM WORKOUT</button></article></section>
+ <section class="section"><article class="card beginner-note"><span class="eyebrow">THE RULE</span><strong>Technique first. Weight second.</strong><p>If you cannot control the movement, make it lighter or use an easier alternative. The goal is to learn, not impress the furniture.</p></article></section>`);
+ $('#beginner-back').onclick=workout;$('#beginner-basics').onclick=openBeginnerBasics;$('#beginner-equipment').onclick=openBeginnerEquipment;
+ $$('[data-start-beginner]').forEach(b=>b.onclick=()=>startBeginnerProgram(b.dataset.startBeginner));
+ $$('[data-beginner-guide]').forEach(b=>b.onclick=()=>openBeginnerGuide(b.dataset.beginnerGuide,null));
+}
+function openBeginnerBasics(){
+ openSheet(`<div class="sheet-head"><div><p class="eyebrow">Beginner basics</p><h2>You only need four words.</h2></div><button class="sheet-close" data-close>×</button></div>
+ <div class="beginner-basics-grid"><article><span>REP</span><strong>One complete movement.</strong><p>One squat down and back up = one rep.</p></article><article><span>SET</span><strong>A group of reps.</strong><p>10 squats, then rest = one set.</p></article><article><span>3 × 10</span><strong>Three sets of ten reps.</strong><p>10 reps → rest → 10 reps → rest → 10 reps.</p></article><article><span>REST</span><strong>Time before the next set.</strong><p>For these workouts, around 1–3 minutes is fine. Take enough time to perform the next set with control.</p></article></div>
+ <article class="card beginner-weight-tip"><span class="eyebrow">HOW HEAVY?</span><strong>Start lighter than you think.</strong><p>Choose a weight you can control for every rep. The final reps can feel challenging, but your technique should still look like the first reps.</p></article>
+ <button class="primary" data-close>GOT IT</button>`);
+}
+function beginnerVisual(pattern='squat'){
+ const path=pattern==='hinge'?'M35 26 L56 42 L69 65 M56 42 L83 45 M69 65 L65 92 M69 65 L88 91':pattern==='row'?'M35 28 L58 42 L76 58 M58 42 L85 44 M76 58 L65 88 M76 58 L94 84':pattern==='lunge'?'M50 22 L50 55 M50 38 L31 52 M50 38 L71 51 M50 55 L29 86 M50 55 L79 82':pattern==='press'?'M50 22 L50 55 M50 35 L26 51 M50 35 L76 51 M50 55 L36 89 M50 55 L66 89':pattern==='overhead'?'M50 22 L50 55 M50 34 L31 13 M50 34 L69 13 M50 55 L37 89 M50 55 L64 89':pattern==='bridge'?'M20 67 L43 58 L65 39 L86 58 M20 67 L12 88 M86 58 L96 86':pattern==='raise'?'M50 22 L50 58 M50 38 L17 35 M50 38 L83 35 M50 58 L36 91 M50 58 L64 91':'M50 22 L50 55 M50 38 L30 52 M50 38 L70 52 M50 55 L35 87 M50 55 L65 87';
+ return `<div class="beginner-motion"><div><span>START</span><svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="14" r="7"/><path d="${path}"/></svg></div><div class="motion-arrow">→</div><div><span>CONTROLLED MOVE</span><svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="14" r="7"/><path d="${path}"/><path class="motion-accent" d="M82 22 Q90 50 79 73"/></svg></div></div>`;
+}
+function openBeginnerGuide(key,activeIndex=null){
+ const g=BEGINNER_EXERCISES[key];if(!g)return;
+ const optionKeys=[...(g.easier||[]),...(g.alternatives||[])].filter((x,i,a)=>BEGINNER_EXERCISES[x]&&a.indexOf(x)===i);
+ openSheet(`<div class="sheet-head"><div><p class="eyebrow">How to</p><h2>${escapeHtml(g.name)}</h2></div><button class="sheet-close" data-close>×</button></div>
+ <div class="beginner-guide-tags"><span>${escapeHtml(g.equipment)}</span><span>${escapeHtml(g.sets+' × '+g.reps)}</span></div>
+ ${beginnerVisual(g.pattern)}
+ ${muscleMap(g.muscle)}
+ <section class="beginner-guide-section"><span class="eyebrow">1 · SET UP</span><ol>${g.setup.map(x=>`<li>${escapeHtml(x)}</li>`).join('')}</ol></section>
+ <section class="beginner-guide-section"><span class="eyebrow">2 · MOVE</span><ol>${g.move.map(x=>`<li>${escapeHtml(x)}</li>`).join('')}</ol></section>
+ <section class="beginner-feel"><span class="eyebrow">WHERE SHOULD I FEEL IT?</span><strong>${escapeHtml(g.feel)}</strong></section>
+ <section class="beginner-guide-section mistakes"><span class="eyebrow">WATCH OUT FOR</span><ul>${g.mistakes.map(x=>`<li>${escapeHtml(x)}</li>`).join('')}</ul></section>
+ ${g.note?`<article class="card beginner-safety-note"><span class="eyebrow">SETUP NOTE</span><p>${escapeHtml(g.note)}</p></article>`:''}
+ ${optionKeys.length?`<section class="beginner-guide-section"><span class="eyebrow">ALTERNATIVES</span><div class="beginner-swap-list">${optionKeys.map(k=>{const a=BEGINNER_EXERCISES[k],easy=(g.easier||[]).includes(k);return `<button type="button" data-view-alt="${k}"><span><strong>${escapeHtml(a.name)}</strong><small>${easy?'Easier setup':'Same training goal · different setup'}</small></span><span class="chev">›</span></button>`}).join('')}</div></section>`:''}
+ ${activeIndex!==null?`<p class="science-note">This guide is for learning the movement. If something feels painful rather than simply challenging, stop the exercise and reassess.</p>`:'<p class="science-note">Technique guidance is based on established exercise-education sources including NASM and ACE. Start light and prioritize control.</p>'}`);
+ $$('[data-view-alt]').forEach(b=>b.onclick=()=>openBeginnerAlternative(b.dataset.viewAlt,activeIndex,key));
+}
+function openBeginnerAlternative(key,activeIndex,fromKey){
+ const g=BEGINNER_EXERCISES[key];if(!g)return;
+ openSheet(`<div class="sheet-head"><div><p class="eyebrow">Alternative</p><h2>${escapeHtml(g.name)}</h2></div><button class="sheet-close" data-close>×</button></div>
+ <div class="beginner-guide-tags"><span>${escapeHtml(g.equipment)}</span><span>${escapeHtml(g.sets+' × '+g.reps)}</span></div>${beginnerVisual(g.pattern)}${muscleMap(g.muscle)}
+ <section class="beginner-guide-section"><span class="eyebrow">SET UP</span><ol>${g.setup.map(x=>`<li>${escapeHtml(x)}</li>`).join('')}</ol></section>
+ <section class="beginner-guide-section"><span class="eyebrow">MOVE</span><ol>${g.move.map(x=>`<li>${escapeHtml(x)}</li>`).join('')}</ol></section>
+ <section class="beginner-feel"><span class="eyebrow">WHERE SHOULD I FEEL IT?</span><strong>${escapeHtml(g.feel)}</strong></section>
+ <div class="sheet-actions">${activeIndex!==null?`<button class="primary" id="use-beginner-alt">USE FOR TODAY</button>`:''}<button class="secondary" id="back-beginner-guide">BACK</button></div>`);
+ const back=$('#back-beginner-guide');if(back)back.onclick=()=>openBeginnerGuide(fromKey,activeIndex);
+ const use=$('#use-beginner-alt');if(use)use.onclick=()=>{const s=data.activeSession;if(!s||!s.items?.[activeIndex])return;const oldSets=s.items[activeIndex].sets||[];s.items[activeIndex]={...beginnerItem(key),targetReps:g.reps,note:'',sets:Array.from({length:g.sets},(_,i)=>oldSets[i]||{weight:'',reps:'',done:false})};activeExerciseOpen=activeIndex;save();closeSheet();active();toast(`${g.name} swapped in for today`)};
 }
 
 const CARDIO_ACTIVITIES=['Running','Walking','Cycling','Hiking','Stairmaster','Treadmill','Rowing','Elliptical','Other'];
@@ -1059,7 +1315,7 @@ function nextTimeSummary(session){
 function actionToast(message,label,onAction,duration=5200){
  const t=$('#toast');clearTimeout(toast._t);t.innerHTML=`<span>${escapeHtml(message)}</span><button type="button" class="toast-action">${escapeHtml(label)}</button>`;t.classList.add('show','actionable');const btn=$('.toast-action',t);if(btn)btn.onclick=()=>{t.classList.remove('show','actionable');t.textContent='';onAction?.()};toast._t=setTimeout(()=>{t.classList.remove('show','actionable');t.textContent=''},duration);
 }
-function startWorkoutTemplate(w){activeExerciseOpen=0;data.activeSession={id:uid(),workoutId:w.id||'',name:w.name,type:w.type||'strength',program:w.program||'',programDay:w.programDay||null,startedAt:Date.now(),date:isoToday(),notes:w.notes||'',duration:w.duration||0,distance:w.distance||0,mode:w.mode||'',items:(w.items||[]).map(x=>({name:x.name,muscle:x.muscle||'',equipment:x.equipment||'',targetReps:x.reps||'',note:x.note||'',sets:Array.from({length:x.sets||3},()=>({weight:'',reps:'',done:false}))}))};save();go('active')}
+function startWorkoutTemplate(w){activeExerciseOpen=0;data.activeSession={id:uid(),workoutId:w.id||'',name:w.name,type:w.type||'strength',program:w.program||'',programDay:w.programDay||null,beginner:!!w.beginner,startedAt:Date.now(),date:isoToday(),notes:w.notes||'',duration:w.duration||0,distance:w.distance||0,mode:w.mode||'',items:(w.items||[]).map(x=>({name:x.name,muscle:x.muscle||'',equipment:x.equipment||'',targetReps:x.reps||'',beginnerGuideKey:x.beginnerGuideKey||'',note:x.note||'',sets:Array.from({length:x.sets||3},()=>({weight:'',reps:'',done:false}))}))};save();go('active')}
 function startWorkout(id){const w=data.customWorkouts.find(w=>w.id===id);if(!w)return go('workout');if(w.type==='cardio')return openLogCardio({activity:w.mode||w.name,duration:w.duration||'',distance:w.distance||'',notes:w.notes||''});startWorkoutTemplate(w)}
 let activeExerciseOpen=0;
 function muscleMap(muscle=''){
@@ -1088,12 +1344,13 @@ function updateActiveProgressUI(s){
 function active(){
  const s=data.activeSession;if(!s){go('workout');return}if(s.type==='cardio'){const legacy=structuredClone(s);data.activeSession=null;save();go('workout');setTimeout(()=>openLogCardio({activity:legacy.mode||legacy.name||'Cardio',duration:legacy.duration||'',distance:legacy.distance||'',notes:legacy.notes||''}),0);return}const mins=sessionElapsedMinutes(s);
  const total=s.items.reduce((sum,item)=>sum+(item.sets?.length||0),0),done=s.items.reduce((sum,item)=>sum+(item.sets||[]).filter(set=>set.done).length,0);
- shell(`${header('Workout',true)}<div class="workout-header"><p class="eyebrow">${escapeHtml(s.type)} · <span id="workout-elapsed-min">${mins}</span> min</p><h1 class="page-title">${escapeHtml(s.name)}</h1><p class="subtle"><span id="active-set-count">${done} of ${total} sets completed</span> · changes save automatically</p><div class="progress-line"><span id="active-progress-bar" style="width:${total?done/total*100:0}%"></span></div></div>
-  <div id="active-session-list">${s.items.map((x,i)=>{const prog=progressionInfo(x,s.id);return `<details class="session-exercise" data-exercise-index="${i}" ${i===activeExerciseOpen?'open':''}><summary><span class="exercise-num">${i+1}</span><strong>${escapeHtml(x.name)}</strong><span class="chev">⌄</span></summary><div class="sets">${muscleMap(x.muscle)}<div class="previous-performance">${prog.previous?`<span><small>LAST</small><strong>${prog.previous.weight} kg × ${prog.previous.reps}</strong></span>`:`<span><small>LAST</small><strong>NO DATA YET</strong></span>`}<span class="progression-hint">${escapeHtml(prog.hint)}</span></div><div class="exercise-coach-line"><span>COACH</span><strong>${escapeHtml(prog.hint)}</strong></div><div class="set-head"><span>Set</span><span>kg</span><span>reps</span><span>done</span></div>${(x.sets||[]).map((z,j)=>`<div class="set-row ${z.done?'set-done':''}" data-set-row="${i}:${j}"><span>${j+1}</span><input inputmode="decimal" value="${escapeHtml(z.weight)}" data-weight="${i}:${j}" placeholder="0"><input inputmode="numeric" value="${escapeHtml(z.reps)}" data-reps="${i}:${j}" placeholder="0"><button type="button" class="set-check ${z.done?'done':''}" data-check="${i}:${j}" aria-pressed="${z.done?'true':'false'}">${z.done?'✓':'○'}</button></div>`).join('')}<div class="set-actions"><button type="button" class="small-btn pink" data-addset="${i}">+ ADD SET</button><button type="button" class="small-btn danger" data-removeset="${i}" ${(x.sets||[]).length<=1?'disabled':''}>− REMOVE SET</button></div><div class="session-note"><textarea data-note="${i}" rows="2" placeholder="Exercise note...">${escapeHtml(x.note||'')}</textarea></div><button type="button" class="text-btn danger-text" data-removeexercise="${i}">REMOVE EXERCISE</button></div></details>`}).join('')}</div>
+ shell(`${header('Workout',true)}<div class="workout-header"><p class="eyebrow">${escapeHtml(s.type)} · <span id="workout-elapsed-min">${mins}</span> min</p><h1 class="page-title">${escapeHtml(s.name)}</h1><p class="subtle"><span id="active-set-count">${done} of ${total} sets completed</span> · changes save automatically</p><div class="progress-line"><span id="active-progress-bar" style="width:${total?done/total*100:0}%"></span></div></div>${s.beginner?`<article class="beginner-active-tip"><span class="eyebrow">BEGINNER MODE</span><strong>Need help? Open HOW TO before the set.</strong><small>Start light. A controlled rep is more useful than a heavier ugly one.</small></article>`:''}
+  <div id="active-session-list">${s.items.map((x,i)=>{const prog=progressionInfo(x,s.id);return `<details class="session-exercise" data-exercise-index="${i}" ${i===activeExerciseOpen?'open':''}><summary><span class="exercise-num">${i+1}</span><strong>${escapeHtml(x.name)}</strong><span class="chev">⌄</span></summary><div class="sets">${muscleMap(x.muscle)}<div class="previous-performance">${prog.previous?`<span><small>LAST</small><strong>${prog.previous.weight} kg × ${prog.previous.reps}</strong></span>`:`<span><small>LAST</small><strong>NO DATA YET</strong></span>`}<span class="progression-hint">${escapeHtml(prog.hint)}</span></div><div class="exercise-coach-line"><span>COACH</span><strong>${escapeHtml(prog.hint)}</strong></div>${x.beginnerGuideKey?`<button type="button" class="beginner-howto" data-howto="${i}"><span>HOW TO</span><small>Setup · movement · muscles · alternatives</small><span class="chev">›</span></button>`:''}<div class="set-head"><span>Set</span><span>kg</span><span>reps</span><span>done</span></div>${(x.sets||[]).map((z,j)=>`<div class="set-row ${z.done?'set-done':''}" data-set-row="${i}:${j}"><span>${j+1}</span><input inputmode="decimal" value="${escapeHtml(z.weight)}" data-weight="${i}:${j}" placeholder="0"><input inputmode="numeric" value="${escapeHtml(z.reps)}" data-reps="${i}:${j}" placeholder="0"><button type="button" class="set-check ${z.done?'done':''}" data-check="${i}:${j}" aria-pressed="${z.done?'true':'false'}">${z.done?'✓':'○'}</button></div>`).join('')}<div class="set-actions"><button type="button" class="small-btn pink" data-addset="${i}">+ ADD SET</button><button type="button" class="small-btn danger" data-removeset="${i}" ${(x.sets||[]).length<=1?'disabled':''}>− REMOVE SET</button></div><div class="session-note"><textarea data-note="${i}" rows="2" placeholder="Exercise note...">${escapeHtml(x.note||'')}</textarea></div><button type="button" class="text-btn danger-text" data-removeexercise="${i}">REMOVE EXERCISE</button></div></details>`}).join('')}</div>
   <section class="section active-workout-actions"><button type="button" class="secondary" data-active-action="add-exercise">+ ADD EXERCISE</button><button type="button" class="primary" data-active-action="finish">FINISH WORKOUT</button></section>`);
  const screen=$('.screen');if(!screen)return;startStrengthClock(s);const back=$('[data-back]');if(back)back.onclick=()=>go('home');
  screen.oninput=e=>{const target=e.target;if(target.matches('[data-weight]')){const[i,j]=target.dataset.weight.split(':').map(Number);if(s.items[i]?.sets?.[j]){s.items[i].sets[j].weight=target.value;save()}}else if(target.matches('[data-reps]')){const[i,j]=target.dataset.reps.split(':').map(Number);if(s.items[i]?.sets?.[j]){s.items[i].sets[j].reps=target.value;save()}}else if(target.matches('[data-note]')){const i=+target.dataset.note;if(s.items[i]){s.items[i].note=target.value;save()}}};
  screen.onclick=e=>{const button=e.target.closest('button');if(!button)return;
+  if(button.dataset.howto!==undefined){const i=+button.dataset.howto,key=s.items[i]?.beginnerGuideKey;if(key)openBeginnerGuide(key,i);return}
   if(button.dataset.activeAction==='finish'){button.disabled=true;button.textContent='FINISHING…';finishSession();return}
   if(button.dataset.activeAction==='add-exercise'){openExercisePicker(s.type,ex=>{const rx=defaultExercisePrescription(ex,s.type);s.items.push({name:ex.name,muscle:ex.muscle||'',equipment:ex.equipment||'',targetReps:rx.reps,note:'',sets:Array.from({length:rx.sets},()=>({weight:'',reps:'',done:false}))});save();active()});return}
   if(button.dataset.check){const[i,j]=button.dataset.check.split(':').map(Number),set=s.items[i]?.sets?.[j];if(set){activeExerciseOpen=i;set.done=!set.done;save();button.classList.toggle('done',set.done);button.textContent=set.done?'✓':'○';button.setAttribute('aria-pressed',set.done?'true':'false');button.closest('.set-row')?.classList.toggle('set-done',set.done);updateActiveProgressUI(s)}return}

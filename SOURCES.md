@@ -104,3 +104,13 @@ PR history is recalculated after live sessions, retroactive session logging, and
 - Aperol official recipe: Aperol Spritz = 9 cl Prosecco + 6 cl Aperol + 3 cl soda. https://www.aperol.com/en-gr/aperol-spritz-cocktail/
 
 Cocktail calorie/macronutrient presets are practical estimates derived from these standard serving sizes and typical mixer amounts. Bar recipes vary, so the app labels them as approximate.
+
+
+## v48 Beginner exercise guidance
+Technique text in Beginner Mode is intentionally short and educational, not individualized medical advice.
+
+- NASM, Squat biomechanics: https://blog.nasm.org/biomechanics-of-the-squat
+- NASM, Barbell Romanian Deadlift: https://www.nasm.org/resource-center/exercise-library/romanian-deadlift-barbell
+- NASM, Dumbbell Romanian Deadlift: https://www.nasm.org/resource-center/exercise-library/dumbbell-romanian-deadlift
+- ACE Exercise Library: https://www.acefitness.org/resources/everyone/exercise-library/
+- HSS, Starting a fitness program: https://www.hss.edu/health-library/conditions-and-treatments/starting-fitness-program

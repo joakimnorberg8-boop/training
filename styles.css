@@ -187,3 +187,65 @@ button,input,select,textarea{font:inherit}button{color:inherit;touch-action:mani
 .cardio-log-preview span{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--cyan);font-weight:900}
 .cardio-log-preview strong{margin-top:3px}
 .cardio-log-preview small{margin-top:4px;color:var(--muted)}
+
+/* v48 Beginner/Home guidance. Uses the same strength-session engine as normal GAYM workouts. */
+.workout-mode-tabs{margin:4px 0 15px}
+.beginner-hero{padding:20px 18px;margin:12px 0 20px;border:1px solid rgba(255,74,178,.25);border-radius:20px;background:linear-gradient(145deg,rgba(255,74,178,.07),rgba(255,255,255,.018))}
+.beginner-hero h2{font-size:27px;margin:5px 0 7px}
+.beginner-hero p{color:var(--muted);line-height:1.5;margin:0 0 16px}
+.beginner-pill{align-self:flex-start;border:1px solid var(--border);border-radius:999px;padding:7px 9px;font-size:9px;font-weight:900;letter-spacing:.1em;color:var(--muted)}
+.beginner-program-grid{display:grid;gap:12px}
+.beginner-program-card{padding:16px}
+.beginner-program-card h3{font-size:20px;margin:4px 0}
+.beginner-program-card>p{color:var(--muted);font-size:13px;margin:0 0 12px}
+.beginner-ex-list{display:grid;gap:6px;margin:12px 0 14px}
+.beginner-ex-list button,.beginner-swap-list button{display:grid;grid-template-columns:30px minmax(0,1fr) auto;align-items:center;gap:9px;width:100%;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.025);color:var(--text);padding:10px;text-align:left;font:inherit}
+.beginner-ex-list button>span:first-child{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;background:rgba(255,74,178,.09);color:var(--pink);font-size:11px;font-weight:900}
+.beginner-ex-list strong,.beginner-ex-list small,.beginner-swap-list strong,.beginner-swap-list small{display:block}
+.beginner-ex-list small,.beginner-swap-list small{color:var(--muted);margin-top:2px;font-size:11px}
+.beginner-note{padding:16px}
+.beginner-note strong{display:block;margin:5px 0}
+.beginner-note p{color:var(--muted);margin:0;line-height:1.45}
+.beginner-basics-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:14px 0}
+.beginner-basics-grid article{border:1px solid var(--border);border-radius:14px;padding:12px;background:rgba(255,255,255,.025)}
+.beginner-basics-grid span{font-size:10px;letter-spacing:.1em;color:var(--pink);font-weight:900}
+.beginner-basics-grid strong{display:block;margin:5px 0;font-size:14px}
+.beginner-basics-grid p{margin:0;color:var(--muted);font-size:12px;line-height:1.4}
+.beginner-weight-tip{padding:15px;margin:13px 0}
+.beginner-weight-tip strong{display:block;margin:5px 0}
+.beginner-weight-tip p{color:var(--muted);margin:0;line-height:1.45}
+.beginner-guide-tags{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0 13px}
+.beginner-guide-tags span{border:1px solid var(--border);border-radius:999px;padding:6px 8px;font-size:10px;color:var(--muted);font-weight:800}
+.beginner-motion{display:grid;grid-template-columns:minmax(0,1fr) 24px minmax(0,1fr);align-items:center;gap:4px;margin:12px 0 14px}
+.beginner-motion>div:not(.motion-arrow){border:1px solid var(--border);border-radius:14px;padding:9px;background:rgba(255,255,255,.025);text-align:center}
+.beginner-motion span{font-size:9px;letter-spacing:.1em;color:var(--muted);font-weight:900}
+.beginner-motion svg{display:block;width:100%;height:105px;margin-top:4px}
+.beginner-motion svg circle,.beginner-motion svg path{fill:none;stroke:var(--text);stroke-width:3.2;stroke-linecap:round;stroke-linejoin:round}
+.beginner-motion svg .motion-accent{stroke:var(--pink);stroke-width:3;stroke-dasharray:4 4}
+.motion-arrow{text-align:center;color:var(--pink);font-size:22px;font-weight:900}
+.beginner-guide-section{margin:17px 0}
+.beginner-guide-section ol,.beginner-guide-section ul{margin:8px 0 0;padding-left:20px;color:var(--text)}
+.beginner-guide-section li{padding:4px 0;line-height:1.42;font-size:13px}
+.beginner-guide-section.mistakes li::marker{color:var(--pink)}
+.beginner-feel{border-left:3px solid var(--lime);padding:11px 13px;background:rgba(160,255,83,.04);border-radius:0 12px 12px 0;margin:16px 0}
+.beginner-feel strong{display:block;margin-top:4px;line-height:1.4}
+.beginner-safety-note{padding:13px;margin:13px 0}
+.beginner-safety-note p{margin:4px 0 0;color:var(--muted);line-height:1.4}
+.beginner-swap-list{display:grid;gap:7px;margin-top:8px}
+.beginner-swap-list button{grid-template-columns:minmax(0,1fr) auto}
+.beginner-active-tip{margin:0 0 12px;padding:12px 14px;border:1px solid rgba(255,74,178,.22);border-radius:14px;background:rgba(255,74,178,.045)}
+.beginner-active-tip strong,.beginner-active-tip small{display:block}
+.beginner-active-tip strong{margin:3px 0}
+.beginner-active-tip small{color:var(--muted)}
+.beginner-howto{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:8px;width:100%;border:1px solid rgba(255,74,178,.22);border-radius:11px;background:rgba(255,74,178,.045);color:var(--text);padding:9px 10px;margin:9px 0 11px;text-align:left;font:inherit}
+.beginner-howto>span:first-child{color:var(--pink);font-size:10px;font-weight:900;letter-spacing:.1em}
+.beginner-howto small{color:var(--muted);font-size:10px}
+@media (min-width:720px){.beginner-program-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.beginner-setup-summary{display:flex;justify-content:space-between;gap:10px;align-items:center;margin:8px 0 10px;padding:9px 11px;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.02)}
+.beginner-setup-summary span{font-size:11px;color:var(--muted);min-width:0}
+.beginner-setup-summary b{font-size:9px;letter-spacing:.09em;white-space:nowrap;color:var(--pink)}
+.beginner-equipment-list{display:grid;gap:8px;margin:15px 0}
+.beginner-equipment-list label{display:flex;align-items:center;gap:11px;min-height:48px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.025)}
+.beginner-equipment-list input{width:20px;height:20px;accent-color:var(--pink)}
+.beginner-equipment-list span{font-weight:800}
