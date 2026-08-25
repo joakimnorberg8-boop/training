@@ -176,3 +176,14 @@ button,input,select,textarea{font:inherit}button{color:inherit;touch-action:mani
 /* v46.1: cancel Night Out changes only activation state; logged drinks remain nutrition history. */
 .night-cancel-btn{justify-self:center;margin-top:4px;color:var(--muted)}
 .night-cancel-btn:active{color:var(--pink)}
+
+/* v47: cardio is a lightweight result log, not a live workout timer. */
+.cardio-log-card{border-color:rgba(67,204,255,.28)}
+.cardio-intensity-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.cardio-intensity{min-height:42px;border:1px solid var(--border);border-radius:11px;background:rgba(255,255,255,.035);color:var(--muted);font:inherit;font-size:11px;font-weight:900;letter-spacing:.06em}
+.cardio-intensity.active{border-color:var(--cyan);color:var(--cyan);background:rgba(67,204,255,.08)}
+.cardio-log-preview{margin:12px 0;padding:13px 14px;border:1px solid var(--border);border-radius:14px;background:rgba(255,255,255,.025)}
+.cardio-log-preview span,.cardio-log-preview strong,.cardio-log-preview small{display:block}
+.cardio-log-preview span{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--cyan);font-weight:900}
+.cardio-log-preview strong{margin-top:3px}
+.cardio-log-preview small{margin-top:4px;color:var(--muted)}
