@@ -89,3 +89,18 @@ PR history is recalculated after live sessions, retroactive session logging, and
 - Strength workout elapsed minutes refresh live.
 - Cardio countdown also derives from persisted timestamps and continues while closed unless explicitly paused.
 - Active-session state is saved on pagehide/visibility changes.
+
+
+## v45 Night Out Mode references
+- Helsenorge, "Kalorier i øl, vin og brennevin" (updated 7 May 2025): Norwegian standard alcohol unit ≈12 g alcohol; 33 cl beer ≈1 unit; 50 cl beer ≈1.5 units; 12.5 cl wine ≈1 unit; 17.5 cl wine ≈1.5 units; 4 cl spirits ≈1 unit. Also gives approximate calories for beer, wine and spirits. https://www.helsenorge.no/en/alkohol/kalorier-i-ol-vin-brennevin/
+- Matvaretabellen: Pils 4.7% (41 kcal, 3.2 g carbohydrate, 0.4 g protein per 100 g). https://www.matvaretabellen.no/pils-4-7-vol-alkohol/
+- Matvaretabellen: Red wine 12% (74 kcal, 0.7 g carbohydrate per 100 g). https://www.matvaretabellen.no/rodvin-12-vol-alkohol/
+- Matvaretabellen: Dry white wine 12% (69 kcal, 0.6 g carbohydrate per 100 g). https://www.matvaretabellen.no/hvitvin-torr-12-vol-alkohol/
+- Matvaretabellen: Sweet cider 4.5% (59 kcal, 8.5 g carbohydrate per 100 g). https://www.matvaretabellen.no/cider-sot-4-5-vol-alkohol/
+- Matvaretabellen: Spirits 40% (244 kcal per 100 g). https://www.matvaretabellen.no/brennevin-40-vol-alkohol/
+- Apéritif: Gin & Tonic recipe uses 4 cl gin + about 15 cl tonic. https://www.aperitif.no/drinker/drink/gin-and-tonic,40172
+- Red Bull Norway: 250 ml contains 80 mg caffeine; original contains 46 kcal and 11 g carbohydrate per 100 ml. https://www.redbull.com/no-no/energydrink/products/red-bull-energy-drink-ingredients-list
+- Coca-Cola Norway: Original Taste contains 42 kcal and 10.6 g carbohydrate per 100 ml; Zero Sugar about 0.3 kcal and 0 g carbohydrate per 100 ml. https://www.coca-cola.com/no/no/brands/coca-cola
+- Aperol official recipe: Aperol Spritz = 9 cl Prosecco + 6 cl Aperol + 3 cl soda. https://www.aperol.com/en-gr/aperol-spritz-cocktail/
+
+Cocktail calorie/macronutrient presets are practical estimates derived from these standard serving sizes and typical mixer amounts. Bar recipes vary, so the app labels them as approximate.
