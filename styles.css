@@ -249,3 +249,15 @@ button,input,select,textarea{font:inherit}button{color:inherit;touch-action:mani
 .beginner-equipment-list label{display:flex;align-items:center;gap:11px;min-height:48px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.025)}
 .beginner-equipment-list input{width:20px;height:20px;accent-color:var(--pink)}
 .beginner-equipment-list span{font-weight:800}
+
+/* v49: equipment-aware Beginner library, shared with normal strength/custom workouts. */
+.beginner-friendly-inline{font-size:8px;letter-spacing:.07em;color:var(--lime);font-weight:900}
+.beginner-friendly-badge{display:inline-flex!important;align-items:center;width:max-content;border:1px solid rgba(160,255,83,.28)!important;background:rgba(160,255,83,.06)!important;color:var(--lime)!important;font-size:8px!important;font-weight:900!important;letter-spacing:.09em!important}
+.beginner-available-grid{display:grid;gap:7px;margin-top:11px}
+.beginner-available-card{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 8px;width:100%;padding:11px 12px;border:1px solid var(--border);border-radius:13px;background:rgba(255,255,255,.025);color:var(--text);text-align:left;font:inherit}
+.beginner-available-card .beginner-friendly-badge{grid-column:1}
+.beginner-available-card>strong{grid-column:1;font-size:13px}
+.beginner-available-card>small{grid-column:1;color:var(--muted);font-size:10px;line-height:1.35}
+.beginner-available-card>.chev{grid-column:2;grid-row:1 / 4;align-self:center}
+.picker-beginner-badge{display:inline-flex;vertical-align:middle;margin-left:5px;padding:3px 5px;border:1px solid rgba(160,255,83,.25);border-radius:999px;color:var(--lime);font-size:7px;letter-spacing:.07em;font-weight:900}
+@media (min-width:680px){.beginner-available-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
