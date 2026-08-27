@@ -114,3 +114,10 @@ Technique text in Beginner Mode is intentionally short and educational, not indi
 - NASM, Dumbbell Romanian Deadlift: https://www.nasm.org/resource-center/exercise-library/dumbbell-romanian-deadlift
 - ACE Exercise Library: https://www.acefitness.org/resources/everyone/exercise-library/
 - HSS, Starting a fitness program: https://www.hss.edu/health-library/conditions-and-treatments/starting-fitness-program
+
+## Exercise animation media
+GAYM v54 loads HOW TO exercise animations at runtime from the official ExerciseDB V1 free API by AscendAPI:
+- API: https://oss.exercisedb.dev/api/v1/exercises
+- Documentation: https://docs.ascendapi.com/products/edb-v1/overview
+
+The free V1 API provides 180p animated GIF demonstrations and is documented for use in fitness apps. The app caches only compact exercise-media metadata locally; GIF files remain served by ExerciseDB.

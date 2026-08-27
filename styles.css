@@ -299,3 +299,112 @@ button,input,select,textarea{font:inherit}button{color:inherit;touch-action:mani
 .beginner-dynamic-note span{font-size:8px;letter-spacing:.09em;color:var(--lime);font-weight:900}
 .beginner-dynamic-note small{font-size:9px;color:var(--muted);text-align:right}
 .weight-spark .weight-flat{stroke:var(--muted);stroke-width:1;stroke-dasharray:3 3;opacity:.55}.weight-spark .weight-dot{fill:var(--lime);stroke:var(--panel2);stroke-width:1}.body-weight-chart{margin:12px 0 14px;padding:14px;border:1px solid var(--line);border-radius:16px;background:var(--card)}.body-weight-chart-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px}.body-weight-chart-head div{display:grid;gap:3px}.body-weight-chart-head span{font-size:9px;font-weight:950;letter-spacing:.075em;color:var(--pink)}.body-weight-chart-head strong{font-size:22px}.body-weight-chart-head small{font-size:10px;color:var(--muted);text-align:right}.body-weight-chart-head small.positive{color:var(--lime)}.body-weight-chart-head small.negative{color:var(--pink)}.body-weight-chart svg{display:block;width:100%;height:118px;margin-top:10px;overflow:visible}.body-weight-chart .grid{stroke:rgba(255,255,255,.08);stroke-width:.7;vector-effect:non-scaling-stroke}.body-weight-chart .line{fill:none;stroke:var(--lime);stroke-width:2.2;vector-effect:non-scaling-stroke}.body-weight-chart circle{fill:var(--lime);stroke:var(--card);stroke-width:1.2;vector-effect:non-scaling-stroke}.body-weight-chart-labels{display:flex;justify-content:space-between;color:var(--muted);font-size:9px;margin-top:2px}.body-weight-chart-empty{height:74px;display:grid;place-items:center;margin-top:10px;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font-size:10px}
+
+.timed-set-icon{display:flex;align-items:center;justify-content:center;min-height:42px;font-size:18px;opacity:.75}
+
+/* v50.6 timed-set countdown */
+button.timed-set-icon{
+  appearance:none;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.035);
+  color:inherit;border-radius:10px;min-height:40px;min-width:40px;padding:0 7px;
+  display:inline-flex;align-items:center;justify-content:center;gap:4px;cursor:pointer;font:inherit;
+}
+button.timed-set-icon span{font-size:17px;line-height:1}
+button.timed-set-icon small{font-size:11px;font-weight:800;line-height:1;white-space:nowrap}
+button.timed-set-icon.running{border-color:var(--pink,#ff4fa3)}
+button.timed-set-icon:focus-visible{outline:2px solid var(--pink,#ff4fa3);outline-offset:2px}
+
+/* v51 Beginner exercise guide rebuild */
+.beginner-screen-head{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;gap:8px;margin:2px 0 12px}
+.beginner-screen-head h1{margin:0;text-align:center;font-size:24px;letter-spacing:-.03em}
+.beginner-mini-unicorn{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;overflow:hidden;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08)}
+.beginner-mini-unicorn img{width:36px;height:36px;object-fit:contain}
+.beginner-top-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:4px;background:#0d1117;border:1px solid rgba(255,255,255,.06);border-radius:12px;margin-bottom:14px}
+.beginner-top-tabs button{border:0;background:transparent;color:#d8dbe2;border-radius:9px;padding:11px 8px;font:inherit;font-weight:800;font-size:13px;cursor:pointer}
+.beginner-top-tabs button.active{background:linear-gradient(135deg,#ff357f,#e64a91);color:white;box-shadow:0 6px 18px rgba(255,53,127,.24)}
+.beginner-library-section{padding-bottom:90px}
+.beginner-library-tools{display:grid;grid-template-columns:minmax(0,1fr) 145px;gap:10px;margin:10px 0 14px}
+.beginner-library-tools label{display:flex;align-items:center;gap:8px;background:#0d1218;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:0 12px;min-width:0}
+.beginner-library-tools label span{opacity:.62;font-size:20px}
+.beginner-library-tools input,.beginner-library-tools select{width:100%;min-width:0;border:0;background:transparent;color:#f7f7fb;font:inherit;font-size:16px;outline:none;min-height:46px}
+.beginner-library-tools select{background:#0d1218;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:0 10px}
+.beginner-library-list{display:grid;gap:9px}
+.beginner-library-card{width:100%;display:grid;grid-template-columns:116px minmax(0,1fr) 18px;align-items:center;gap:12px;text-align:left;border:1px solid rgba(255,255,255,.075);background:linear-gradient(145deg,#111820,#0d1319);border-radius:15px;padding:8px 10px;color:inherit;cursor:pointer;overflow:hidden}
+.beginner-library-card:active{transform:scale(.995)}
+.exercise-thumb{position:relative;width:110px;height:74px;border-radius:11px;overflow:hidden;background:radial-gradient(circle at 55% 35%,rgba(255,111,93,.08),transparent 56%),#0a0f14}
+.exercise-thumb .guide-demo.compact{height:74px;border:0;background:transparent;border-radius:0}
+.exercise-thumb .guide-demo.compact svg{height:100%;width:100%}
+.exercise-thumb-play{position:absolute;left:7px;bottom:7px;width:25px;height:25px;border-radius:50%;display:grid;place-items:center;font-size:10px;color:white;background:rgba(5,8,12,.82);border:1px solid rgba(255,255,255,.28)}
+.beginner-card-copy{min-width:0;display:grid;gap:5px}
+.beginner-card-title{display:flex;align-items:center;gap:7px;min-width:0;flex-wrap:wrap}
+.beginner-card-title strong{font-size:15px;line-height:1.15}
+.beginner-card-title b{font-size:10px;line-height:1;background:rgba(43,211,93,.15);color:#4ee878;border:1px solid rgba(78,232,120,.18);padding:4px 6px;border-radius:5px;text-transform:none}
+.beginner-card-copy small{font-size:12px;color:#c0c4cc;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.beginner-card-copy em{font-style:normal;font-size:12px;color:#f0f0f4}
+.beginner-equipment-hub{display:grid;gap:10px}
+.guide-tabs{display:flex;gap:4px;overflow-x:auto;padding:2px 0 10px;margin-bottom:4px;scrollbar-width:none}
+.guide-tabs::-webkit-scrollbar{display:none}
+.guide-tabs button{flex:0 0 auto;border:0;background:transparent;color:#c4c7ce;padding:9px 12px;border-radius:9px;font:inherit;font-size:13px;font-weight:800;cursor:pointer}
+.guide-tabs button.active{color:#ff6aa5;background:rgba(255,65,137,.12)}
+.guide-panel{display:none}
+.guide-panel.active{display:block}
+.guide-demo{position:relative;background:linear-gradient(150deg,#121b24,#0a1016);border:1px solid rgba(255,255,255,.08);border-radius:18px;overflow:hidden}
+.guide-demo>svg{display:block;width:100%;height:auto;max-height:330px}
+.guide-stage{fill:url(#none);stroke:transparent}
+.guide-body{stroke:#73777d}
+.guide-head{fill:#767a80;stroke:#9b9da1;stroke-width:1.5}
+.guide-torso{fill:#6c7076;stroke:#909399;stroke-width:1.5}
+.guide-muscle.primary{fill:#ff4e49;stroke:#ff7c68;stroke-width:1.2;opacity:.96}
+.guide-muscle.secondary{fill:#ff8f4d;stroke:#ffae73;stroke-width:1;opacity:.92}
+.guide-equipment line,.guide-equipment circle{stroke:#a4a7ad;stroke-width:4;fill:#363a40}
+.guide-machine rect{fill:#242a31;stroke:#737981;stroke-width:2}.guide-machine line{stroke:#7d838b;stroke-width:2}
+@keyframes guidePoseA{0%,42%{opacity:1}50%,92%{opacity:.08}100%{opacity:1}}
+@keyframes guidePoseB{0%,42%{opacity:.08}50%,92%{opacity:1}100%{opacity:.08}}.guide-demo.compact .pose-a{opacity:1}.guide-demo.compact .pose-b{opacity:0}.guide-demo.compact .guide-stage{fill:transparent}
+.guide-player{display:grid;grid-template-columns:38px minmax(0,1fr) auto;align-items:center;gap:10px;padding:9px 12px 12px}
+.guide-play{width:36px;height:36px;border-radius:50%;border:1px solid rgba(255,255,255,.14);background:#11171d;color:white;font-weight:900;cursor:pointer}
+.guide-progress{height:5px;border-radius:999px;background:#2b3037;overflow:hidden}
+.guide-progress i{display:block;height:100%;width:100%;transform-origin:left center;background:#ff3f86;animation:guideProgress 2.8s linear infinite}
+@keyframes guideProgress{0%{transform:scaleX(0)}100%{transform:scaleX(1)}}
+.guide-loop-label{font-size:10px;color:#b5bac2;font-weight:800;letter-spacing:.06em}
+.guide-step-preview{padding:14px 2px 2px;display:grid;gap:5px}.guide-step-preview span{color:#ff679f;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.08em}.guide-step-preview strong{font-size:14px;line-height:1.45}
+.guide-muscle-card{margin:14px 0;background:#11171d;border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:12px}
+.guide-muscle-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}.guide-muscle-head h3{margin:0;font-size:15px}.guide-muscle-head span{font-size:10px;color:#c2c6cd;white-space:nowrap}.guide-muscle-head b,.guide-muscle-head i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px}.guide-muscle-head b{background:#ff4e49}.guide-muscle-head i{background:#ff8f4d;margin-left:8px}.guide-muscle-card>p{margin:8px 0 0;text-align:center;color:#cfd2d8;font-size:12px}
+.guide-facts{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:rgba(255,255,255,.07);border-radius:14px;overflow:hidden;margin:12px 0}.guide-facts div{background:#0f151b;padding:12px;display:flex;justify-content:space-between;gap:10px}.guide-facts span{color:#aeb3bb;font-size:11px}.guide-facts strong{font-size:12px;text-align:right}
+.guide-attribution{font-size:10px;color:#737983;line-height:1.45;margin:14px 2px 2px}
+.exercise-guide-title h2{max-width:240px}
+@media(max-width:390px){.beginner-library-tools{grid-template-columns:1fr}.beginner-library-card{grid-template-columns:96px minmax(0,1fr) 14px}.exercise-thumb{width:92px;height:66px}.exercise-thumb .guide-demo.compact{height:66px}.guide-muscle-head{align-items:flex-start;flex-direction:column}.guide-loop-label{display:none}}
+@media(prefers-reduced-motion:reduce){.guide-demo .pose-a{opacity:1!important}.guide-demo .pose-b{opacity:0!important}}
+
+/* v52 unified exercise library */
+.builder-howto{margin-left:auto;white-space:nowrap}
+.variation-list{display:grid;gap:10px}.variation-card{width:100%;display:grid;grid-template-columns:92px minmax(0,1fr) 24px;gap:12px;align-items:center;text-align:left;color:inherit;background:var(--card,#11151b);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:9px}
+.variation-card .exercise-thumb{height:68px;min-height:68px}.variation-card span:nth-child(2){display:grid;gap:3px;min-width:0}.variation-card strong{font-size:14px}.variation-card small,.variation-card em{font-size:11px;color:var(--muted,#8f96a3);font-style:normal}
+
+/* v54 ExerciseDB 3D animation media */
+.exercise-media{min-height:230px;border-radius:18px;overflow:hidden;background:#080b10;display:flex;align-items:center;justify-content:center;border:1px solid rgba(255,255,255,.08)}
+.exercise-media img{width:100%;height:100%;min-height:230px;object-fit:contain;background:#fff;display:block}
+.exercise-media.compact{min-height:72px;height:72px;border-radius:10px}
+.exercise-media.compact img{min-height:72px;height:72px;object-fit:cover}
+.exercise-media-loading,.exercise-media-fallback{min-height:inherit;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;text-align:center;padding:12px;color:var(--muted,#9299a5)}
+.exercise-media-loading span{width:20px;height:20px;border:2px solid rgba(255,255,255,.15);border-top-color:var(--pink,#ff3e78);border-radius:50%;animation:gaymMediaSpin .8s linear infinite}
+.exercise-media-loading strong,.exercise-media-fallback strong{font-size:12px;color:var(--text,#fff)}
+.exercise-media-fallback small{font-size:11px;max-width:220px}
+@keyframes gaymMediaSpin{to{transform:rotate(360deg)}}
+
+.exercise-thumb-static{height:68px;min-height:68px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:linear-gradient(145deg,#11151c,#080a0e);border:1px solid rgba(255,255,255,.07);border-radius:10px;text-align:center}
+.exercise-thumb-static .exercise-thumb-3d{font-size:10px;font-weight:900;letter-spacing:.08em;color:var(--pink,#ff3e78)}
+.exercise-thumb-static strong{font-size:11px}.exercise-thumb-static small{font-size:9px;color:var(--muted,#8f96a3);max-width:86%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* v54.1: generated anatomy figures removed */
+.muscle-text-only{padding:16px}.muscle-chip-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.muscle-chip{display:inline-flex;align-items:center;gap:7px;padding:8px 10px;border:1px solid rgba(255,255,255,.08);border-radius:999px;font-size:12px;font-weight:800;background:rgba(255,255,255,.035)}
+.muscle-chip b{width:8px;height:8px;border-radius:50%;background:var(--pink,#ff3e78)}.muscle-chip.secondary b{opacity:.55}
+.muscle-text-note{margin:12px 0 0;color:var(--muted,#8f96a3);font-size:12px;line-height:1.45}
+
+/* v54.3 variation cards: full text, no clipping */
+.variation-card{grid-template-columns:84px minmax(0,1fr) 20px;align-items:start;padding:11px;min-height:96px}
+.variation-card>span:nth-child(2){min-width:0;display:flex;flex-direction:column;gap:4px;padding-top:2px}
+.variation-card strong,.variation-card small,.variation-card em{white-space:normal!important;overflow:visible!important;text-overflow:clip!important;word-break:normal;overflow-wrap:anywhere;line-height:1.35}
+.variation-card strong{font-size:14px}.variation-card small,.variation-card em{font-size:11px}
+.variation-card .exercise-thumb{width:84px;height:72px;min-height:72px}
+.variation-card .chev{align-self:center}
+@media(max-width:360px){.variation-card{grid-template-columns:70px minmax(0,1fr) 18px;gap:9px}.variation-card .exercise-thumb{width:70px}}
