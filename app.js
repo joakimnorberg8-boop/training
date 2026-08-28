@@ -1,6 +1,6 @@
 (()=>{
 'use strict';
-// GAYM v65 workout sharing + social PBs: privacy-aware workout details, PR activity, friend notifications.
+// GAYM v67 PB merged social: shareable Night Out location, friend activity + notifications, built on v65 workout/PB social.
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 
 const SUPABASE_URL='https://dkiejeckkwzowpkxapbc.supabase.co';
@@ -1736,17 +1736,66 @@ function pickNightOutLine(){
  const pool=rare?NIGHT_OUT_RARE_LINES:NIGHT_OUT_PARTY_LINES;
  return pool[Math.floor(Math.random()*pool.length)];
 }
-function activateNightOut(){
+function nightOutSocialSource(date=isoToday()){return `nightout:${date}`}
+function nightOutPlaceLabel(state=nightOutState()){
+ if(!state)return '';
+ if(state.locationType==='home')return 'Home';
+ return String(state.place||'').trim()||'Out tonight';
+}
+async function publishNightOutSocial(state=nightOutState(),{notify=true}={}){
+ if(!state?.shareWithFriends||!sb||!authUser||activeDataUserId!==authUser.id)return {error:null};
+ const place=nightOutPlaceLabel(state),sourceId=nightOutSocialSource(state.date);
+ const row={user_id:authUser.id,kind:'night_out',source_id:sourceId,title:state.locationType==='home'?'Night Out · Home':`Night Out · ${place}`,body:state.locationType==='home'?'Home tonight. The group chat has entered active duty.':`Out at ${place} tonight.`,metadata:{date:state.date,place,location_type:state.locationType||'out',active:true},visibility:'friends',updated_at:new Date().toISOString(),created_at:new Date(state.activatedAt||Date.now()).toISOString()};
+ const {data:post,error}=await sb.from('activity_posts').upsert(row,{onConflict:'user_id,kind,source_id',ignoreDuplicates:false}).select('id').single();
+ if(error){console.error('night out share',error);return {error}}
+ socialCacheUpdatedAt=0;
+ if(notify&&post?.id){const r=await sb.rpc('notify_friends_night_out',{p_post_id:post.id});if(r.error)console.error('night out friend notification',r.error)}
+ return {error:null,postId:post?.id};
+}
+async function unpublishNightOutSocial(date=nightOutState()?.date){
+ if(!date||!sb||!authUser||activeDataUserId!==authUser.id)return {error:null};
+ const {error}=await sb.from('activity_posts').delete().eq('user_id',authUser.id).eq('kind','night_out').eq('source_id',nightOutSocialSource(date));
+ if(error)console.error('night out unshare',error);else socialCacheUpdatedAt=0;
+ return {error};
+}
+async function activateNightOut({shareWithFriends=false,locationType='out',place=''}={}){
  const line=pickNightOutLine();
- data.nightOut={date:isoToday(),partyLine:line,activatedAt:Date.now(),lastPromptDate:null};
+ const normalizedType=locationType==='home'?'home':'out';
+ const normalizedPlace=normalizedType==='home'?'Home':String(place||'').trim().slice(0,80);
+ data.nightOut={date:isoToday(),partyLine:line,activatedAt:Date.now(),lastPromptDate:null,shareWithFriends:!!shareWithFriends,locationType:normalizedType,place:normalizedPlace};
  save();
+ if(shareWithFriends){
+  if(!authUser){data.nightOut.shareWithFriends=false;save();toast('Log in to share Night Out with friends.')}
+  else{const r=await publishNightOutSocial(data.nightOut,{notify:true});if(r.error){data.nightOut.shareWithFriends=false;save();toast(`Night Out is active, but sharing failed: ${r.error.message}`)}else toast('Friends were notified.')}
+ }
  showNightOutParty();
+}
+function nightOutLocationFields(state={}){
+ const type=state.locationType==='home'?'home':'out',place=String(state.place||'');
+ return `<div class="night-social-fields"><div class="field"><label>Where are you tonight?</label><select id="night-location-type"><option value="out" ${type==='out'?'selected':''}>Bar / club / somewhere out</option><option value="home" ${type==='home'?'selected':''}>Home</option></select></div><div class="field" id="night-place-field" ${type==='home'?'hidden':''}><label>Bar or place</label><input id="night-place" maxlength="80" value="${escapeHtml(type==='home'?'':place)}" placeholder="e.g. London Pub, Elsker, home party…"><small class="field-help">Only this place label is shared. Your drinks, calories and alcohol amounts stay private.</small></div><label class="auto-target-row night-share-toggle"><input id="night-share-friends" type="checkbox" ${state.shareWithFriends?'checked':''} ${!authUser?'disabled':''}><span><strong>Share Night Out with friends</strong><small>${authUser?'Friends get a bell notification and can react/comment in Friends Activity.':'Log in to use social sharing.'}</small></span></label></div>`;
+}
+function bindNightOutLocationFields(){
+ const type=$('#night-location-type'),field=$('#night-place-field');if(type&&field)type.onchange=()=>{field.hidden=type.value==='home'};
 }
 function showNightOutConfirm(){
  openSheet(`<div class="sheet-head"><div><p class="eyebrow">Night Out Mode</p><h2>Going out tonight?</h2></div><button class="sheet-close" data-close>×</button></div>
- <article class="night-confirm-card"><strong>Are you sure?</strong><p>Are you ready to make tomorrow's workout somebody else's problem?</p></article>
- <div class="night-confirm-actions"><button class="primary" id="night-confirm-yes">YES, OBVIOUSLY</button><button class="secondary" data-close>NOT TONIGHT</button></div>`);
- const yes=$('#night-confirm-yes');if(yes)yes.onclick=activateNightOut;
+ <article class="night-confirm-card"><strong>Tonight's coordinates?</strong><p>Tell GAYM where the plot is happening. Sharing is optional.</p></article>${nightOutLocationFields({locationType:'out',place:'',shareWithFriends:false})}
+ <div class="night-confirm-actions"><button class="primary" id="night-confirm-yes">ACTIVATE NIGHT OUT</button><button class="secondary" data-close>NOT TONIGHT</button></div>`);
+ bindNightOutLocationFields();
+ const yes=$('#night-confirm-yes');if(yes)yes.onclick=async()=>{yes.disabled=true;yes.textContent='ACTIVATING…';await activateNightOut({shareWithFriends:!!$('#night-share-friends')?.checked,locationType:$('#night-location-type')?.value||'out',place:$('#night-place')?.value||''})};
+}
+function editNightOutSharing(){
+ const state=nightOutState();if(!state)return showNightOutConfirm();
+ openSheet(`<div class="sheet-head"><div><p class="eyebrow">Night Out</p><h2>Location & sharing</h2></div><button class="sheet-close" data-close>×</button></div>${nightOutLocationFields(state)}<div class="sheet-actions"><button class="primary" id="night-sharing-save">SAVE</button></div>`);
+ bindNightOutLocationFields();
+ $('#night-sharing-save').onclick=async()=>{
+  const btn=$('#night-sharing-save'),wasShared=!!state.shareWithFriends,nextShared=!!$('#night-share-friends')?.checked,type=$('#night-location-type')?.value==='home'?'home':'out',place=type==='home'?'Home':String($('#night-place')?.value||'').trim().slice(0,80);
+  btn.disabled=true;btn.textContent='SAVING…';
+  if(wasShared&&!nextShared){const r=await unpublishNightOutSocial(state.date);if(r.error){btn.disabled=false;btn.textContent='SAVE';return toast(`Could not stop sharing: ${r.error.message}`)}}
+  state.shareWithFriends=nextShared;state.locationType=type;state.place=place;save();
+  if(nextShared){const r=await publishNightOutSocial(state,{notify:!wasShared});if(r.error){btn.disabled=false;btn.textContent='SAVE';return toast(`Could not update sharing: ${r.error.message}`)}}
+  closeSheet();showNightOutParty();toast(nextShared?'Night Out sharing updated.':'Night Out is private.');
+ };
 }
 
 const NIGHT_OUT_CANCEL_LINES=[
@@ -1764,15 +1813,17 @@ function showCancelNightOut(){
  openSheet(`<div class="sheet-head"><div><p class="eyebrow">Night Out Mode</p><h2>Cancel Night Out?</h2></div><button class="sheet-close" data-close>×</button></div>
  <article class="night-confirm-card"><strong>Plans changed?</strong><p>Character development.</p></article>
  <div class="night-confirm-actions"><button class="primary" id="night-cancel-yes">YES, CANCEL</button><button class="secondary" data-close>KEEP IT ACTIVE</button></div>`);
- const yes=$('#night-cancel-yes');if(yes)yes.onclick=()=>{data.nightOut=null;save();const line=pickNightOutCancelLine();openSheet(`<div class="sheet-head"><div><p class="eyebrow">Night Out Cancelled</p><h2>Plot twist.</h2></div><button class="sheet-close" data-close>×</button></div><div class="night-party-unicorn"><div class="night-party-ring"><img src="${UNICORN_STATES.rest.image}" alt=""></div><div class="night-party-speech">${escapeHtml(line)}</div></div><button class="primary" id="night-cancel-done">BACK TO HOME</button>`);const done=$('#night-cancel-done');if(done)done.onclick=()=>{closeSheet();render()};};
+ const yes=$('#night-cancel-yes');if(yes)yes.onclick=async()=>{const old=nightOutState();yes.disabled=true;yes.textContent='CANCELLING…';if(old?.shareWithFriends){const r=await unpublishNightOutSocial(old.date);if(r.error){yes.disabled=false;yes.textContent='YES, CANCEL';return toast(`Could not stop sharing: ${r.error.message}`)}}data.nightOut=null;save();const line=pickNightOutCancelLine();openSheet(`<div class="sheet-head"><div><p class="eyebrow">Night Out Cancelled</p><h2>Plot twist.</h2></div><button class="sheet-close" data-close>×</button></div><div class="night-party-unicorn"><div class="night-party-ring"><img src="${UNICORN_STATES.rest.image}" alt=""></div><div class="night-party-speech">${escapeHtml(line)}</div></div><button class="primary" id="night-cancel-done">BACK TO HOME</button>`);const done=$('#night-cancel-done');if(done)done.onclick=()=>{closeSheet();render()};};
 }
 function showNightOutParty(){
  const s=nightOutState(),line=s?.partyLine||pickNightOutLine();
  openSheet(`<div class="sheet-head"><div><p class="eyebrow">Night Out Activated</p><h2>Well then.</h2></div><button class="sheet-close" data-close>×</button></div>
  <div class="night-party-unicorn"><div class="night-party-ring"><img src="${UNICORN_STATES.evening.image}" alt=""></div><div class="night-party-speech">${escapeHtml(line)}</div></div>
+ <div class="night-social-status"><span>${s?.shareWithFriends?'SHARED WITH FRIENDS':'PRIVATE'}</span><strong>${escapeHtml(nightOutPlaceLabel(s))}</strong><small>${s?.shareWithFriends?'Friends can see your Night Out and react. Drink details remain private.':'Only you can see this Night Out.'}</small></div>
  <p class="subtle">You don't need to log anything now. Come back later or tomorrow and add roughly what you drank.</p>
- <div class="night-confirm-actions"><button class="primary" id="night-open-drinks">OPEN DRINK MENU</button><button class="secondary" data-close>ENJOY THE NIGHT</button><button class="text-btn night-cancel-btn" id="night-cancel-mode" type="button">CANCEL NIGHT OUT</button></div>`);
+ <div class="night-confirm-actions"><button class="primary" id="night-open-drinks">OPEN DRINK MENU</button><button class="secondary" id="night-edit-sharing">LOCATION & SHARING</button><button class="secondary" data-close>ENJOY THE NIGHT</button><button class="text-btn night-cancel-btn" id="night-cancel-mode" type="button">CANCEL NIGHT OUT</button></div>`);
  const b=$('#night-open-drinks');if(b)b.onclick=()=>openNightOut(isoToday());
+ const e=$('#night-edit-sharing');if(e)e.onclick=editNightOutSharing;
  const c=$('#night-cancel-mode');if(c)c.onclick=showCancelNightOut;
 }
 function nightEstimatePreset(level){
@@ -1850,7 +1901,7 @@ function nightOutHomeMarkup(){
  const s=nightOutState(),today=isoToday(),yday=yesterdayKey();
  if(s?.date===today){
   const a=alcoholSummary(today);
-  const sub=a.count?`${a.count} drink${a.count===1?'':'s'} logged · ~${a.units.toFixed(1)} units`:'Party mode is on. Log later if you want.';
+  const place=s.shareWithFriends?` · ${nightOutPlaceLabel(s)}`:'';const sub=(a.count?`${a.count} drink${a.count===1?'':'s'} logged · ~${a.units.toFixed(1)} units`:'Party mode is on. Log later if you want.')+place;
   return `<button class="night-out-home-btn active" id="night-out-home" type="button"><span>🍸</span><span><b>NIGHT OUT ACTIVE</b><small>${escapeHtml(sub)}</small></span><span class="chev">›</span></button>`;
  }
  if(s?.date===yday&&s.lastPromptDate!==today){
@@ -2415,21 +2466,41 @@ async function syncRecentActivitiesFromLocal(expectedUserId=activeDataUserId,{no
  const privacy=await sb.from('privacy_settings').select('workouts_visibility,prs_visibility,workout_details_visibility').eq('user_id',expectedUserId).maybeSingle();
  if(authUser?.id!==expectedUserId||activeDataUserId!==expectedUserId)return;
  const workoutVis=privacy.data?.workouts_visibility||'friends',prVis=privacy.data?.prs_visibility||'friends',detailLevel=privacy.data?.workout_details_visibility||'full';
+ // PBs live inside their parent workout card. A PB can never be exposed to a wider audience than the workout itself.
  const sharePrs=prVis==='public'||(prVis==='friends'&&workoutVis!=='public');
  const rows=[];
  sessionsSnapshot.forEach(sess=>{
   const x=sessionSocialSummary(sess),sid=String(sess.id||`${sess.date}-${sess.name||sess.type||'workout'}`),created=sess.finishedAt?new Date(sess.finishedAt).toISOString():(sess.date?`${sess.date}T12:00:00Z`:new Date().toISOString());
   rows.push({user_id:expectedUserId,kind:'workout',source_id:sid,title:x.title,body:x.body,metadata:socialWorkoutMetadata(sess,detailLevel,sharePrs),visibility:workoutVis,created_at:created,updated_at:new Date().toISOString()});
-  if(sharePrs)(sess.prs||[]).forEach(pr=>rows.push({user_id:expectedUserId,kind:'pr',source_id:`${sid}::${String(pr.name||'pr').toLowerCase()}`,title:`New PB · ${pr.name}`,body:`${Number(pr.weight)||0} kg × ${Number(pr.reps)||0} reps`,metadata:{date:sess.date||null,parent_session_id:sid,exercise:pr.name,weight:Number(pr.weight)||0,reps:Number(pr.reps)||0},visibility:prVis,created_at:created,updated_at:new Date().toISOString()}));
  });
- const {data:before}=await sb.from('activity_posts').select('id,kind,source_id').eq('user_id',expectedUserId).in('kind',['workout','pr']);
- const beforeSources=new Set((before||[]).map(r=>`${r.kind}|${r.source_id}`));
- if(rows.length){const up=await sb.from('activity_posts').upsert(rows,{onConflict:'user_id,kind,source_id',ignoreDuplicates:false}).select('id,kind,source_id,title,body');if(up.error)console.error('activity sync upsert',up.error);else if(notifyPrs){for(const post of up.data||[]){if(post.kind!=='pr'||beforeSources.has(`pr|${post.source_id}`))continue;const parentId=String(post.source_id).split('::')[0],sess=sessionsSnapshot.find(x=>String(x.id)===parentId);if(!sess||sess.date!==isoToday())continue;const r=await sb.rpc('notify_friends_pr',{p_post_id:post.id});if(r.error)console.error('PR friend notification',r.error)}}}
+ const {data:before,error:beforeError}=await sb.from('activity_posts').select('id,kind,source_id,metadata').eq('user_id',expectedUserId).in('kind',['workout','pr']);
+ if(beforeError)console.error('activity sync before',beforeError);
+ const previousWorkouts=new Map((before||[]).filter(r=>r.kind==='workout').map(r=>[String(r.source_id),r]));
+ if(rows.length){
+  const up=await sb.from('activity_posts').upsert(rows,{onConflict:'user_id,kind,source_id',ignoreDuplicates:false}).select('id,kind,source_id,title,body,metadata');
+  if(up.error)console.error('activity sync upsert',up.error);
+  else if(notifyPrs){
+   for(const post of up.data||[]){
+    if(post.kind!=='workout')continue;
+    const sess=sessionsSnapshot.find(x=>String(x.id)===String(post.source_id));
+    if(!sess||sess.date!==isoToday())continue;
+    const oldPrs=previousWorkouts.get(String(post.source_id))?.metadata?.prs||[];
+    const oldKeys=new Set(oldPrs.map(pr=>`${String(pr.name||'').toLowerCase()}|${Number(pr.weight)||0}|${Number(pr.reps)||0}`));
+    for(const pr of post.metadata?.prs||[]){
+     const key=`${String(pr.name||'').toLowerCase()}|${Number(pr.weight)||0}|${Number(pr.reps)||0}`;
+     if(oldKeys.has(key))continue;
+     const r=await sb.rpc('notify_friends_pr',{p_post_id:post.id,p_exercise:String(pr.name||''),p_weight:Number(pr.weight)||0,p_reps:Number(pr.reps)||0});
+     if(r.error)console.error('PR friend notification',r.error);
+    }
+   }
+  }
+ }
  if(authUser?.id!==expectedUserId||activeDataUserId!==expectedUserId)return;
  const {data:remote,error:remoteError}=await sb.from('activity_posts').select('id,kind,source_id').eq('user_id',expectedUserId).in('kind',['workout','pr']);
  if(remoteError){console.error('activity sync reconcile',remoteError);return}
- const localKeys=new Set(rows.map(r=>`${r.kind}|${String(r.source_id)}`));
- const staleIds=(remote||[]).filter(r=>!localKeys.has(`${r.kind}|${String(r.source_id)}`)).map(r=>r.id);
+ const localWorkoutIds=new Set(rows.map(r=>String(r.source_id)));
+ // All legacy standalone PR cards are stale by design in v67. Workout cards are the single social source of truth.
+ const staleIds=(remote||[]).filter(r=>r.kind==='pr'||(r.kind==='workout'&&!localWorkoutIds.has(String(r.source_id)))).map(r=>r.id);
  if(staleIds.length){const del=await sb.from('activity_posts').delete().in('id',staleIds);if(del.error)console.error('activity sync delete stale',del.error)}
 }
 async function loadSocialState(force=false){
@@ -2522,9 +2593,10 @@ function kudosLabel(kudos=[]){
 }
 function activityCard(post){
  activityPostCache.set(post.id,post);
- const p=post.profiles||cloudProfile||{},kudos=post.activity_kudos||[],mineKudos=kudos.some(k=>k.user_id===authUser?.id),comments=post.activity_comments||[],who=kudosLabel(kudos),isWorkout=post.kind==='workout',isPr=post.kind==='pr';
- const clickable=isWorkout||isPr;
- return `<article class="card activity-card ${clickable?'clickable':''}" data-post="${post.id}" ${clickable?`data-activity-detail="${post.id}"`:''}><div class="activity-head">${avatarMarkup(p,'sm')}<button data-open-user="${post.user_id}" class="activity-owner"><strong>${escapeHtml(p.display_name||p.username||'You')}</strong><span>@${escapeHtml(p.username||'you')} · ${new Date(post.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span></button></div><div class="activity-body"><span class="activity-kind ${isPr?'pr-kind':''}">${isPr?'NEW PB':isWorkout?'WORKOUT':'UPDATE'}</span><h3>${escapeHtml(post.title)}</h3>${post.body?`<p>${escapeHtml(post.body)}</p>`:''}${isWorkout?`<small class="activity-open-hint">Tap to view workout →</small>`:isPr?`<small class="activity-open-hint">Tap to celebrate & comment →</small>`:''}</div><div class="activity-actions"><button class="${mineKudos?'active':''}" data-kudos="${post.id}">♥ <span>${kudos.length}</span> KUDOS</button><button data-comments="${post.id}">COMMENT <span>${comments.length}</span></button></div>${kudos.length?`<button class="kudos-people" data-kudos-list="${post.id}"><span>♥</span><span>Kudos from <strong>${who||`${kudos.length} ${kudos.length===1?'person':'people'}`}</strong></span><span class="chev">›</span></button>`:''}${comments.slice(-2).map(c=>`<div class="activity-comment"><strong>@${escapeHtml(c.profiles?.username||'friend')}</strong> ${escapeHtml(c.body)}</div>`).join('')}</article>`;
+ const p=post.profiles||cloudProfile||{},kudos=post.activity_kudos||[],mineKudos=kudos.some(k=>k.user_id===authUser?.id),comments=post.activity_comments||[],who=kudosLabel(kudos),isWorkout=post.kind==='workout',isNight=post.kind==='night_out',prs=isWorkout?(post.metadata?.prs||[]):[];
+ const clickable=isWorkout||isNight;
+ const prMarkup=prs.length?`<div class="feed-pr-highlights"><span>NEW PB${prs.length>1?'S':''}</span>${prs.map(pr=>`<div><strong>${escapeHtml(pr.name||'Exercise')}</strong><b>${Number(pr.weight)||0} kg × ${Number(pr.reps)||0}</b></div>`).join('')}</div>`:'';
+ return `<article class="card activity-card ${clickable?'clickable':''} ${isNight?'night-activity-card':''}" data-post="${post.id}" ${clickable?`data-activity-detail="${post.id}"`:''}><div class="activity-head">${avatarMarkup(p,'sm')}<button data-open-user="${post.user_id}" class="activity-owner"><strong>${escapeHtml(p.display_name||p.username||'You')}</strong><span>@${escapeHtml(p.username||'you')} · ${new Date(post.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span></button></div><div class="activity-body"><span class="activity-kind ${isNight?'night-kind':''}">${isWorkout?'WORKOUT':isNight?'NIGHT OUT':'UPDATE'}</span><h3>${escapeHtml(post.title)}</h3>${post.body?`<p>${escapeHtml(post.body)}</p>`:''}${prMarkup}${isWorkout?`<small class="activity-open-hint">Tap to view workout →</small>`:isNight?`<small class="activity-open-hint">Tap to react, comment or motivate →</small>`:''}</div><div class="activity-actions"><button class="${mineKudos?'active':''}" data-kudos="${post.id}">♥ <span>${kudos.length}</span> KUDOS</button><button data-comments="${post.id}">COMMENT <span>${comments.length}</span></button></div>${kudos.length?`<button class="kudos-people" data-kudos-list="${post.id}"><span>♥</span><span>Kudos from <strong>${who||`${kudos.length} ${kudos.length===1?'person':'people'}`}</strong></span><span class="chev">›</span></button>`:''}${comments.slice(-2).map(c=>`<div class="activity-comment"><strong>@${escapeHtml(c.profiles?.username||'friend')}</strong> ${escapeHtml(c.body)}</div>`).join('')}</article>`;
 }
 function bindActivityCards(){
  $$('[data-open-user]').forEach(b=>b.onclick=e=>{e.stopPropagation();if(b.dataset.openUser!==authUser.id)openUserProfile(b.dataset.openUser)});
@@ -2547,9 +2619,9 @@ function workoutExerciseMarkup(meta={}){
 }
 function openActivityDetail(post){
  if(!post)return toast('Could not load activity.');activityPostCache.set(post.id,post);
- const p=post.profiles||{},mine=post.user_id===authUser?.id,isWorkout=post.kind==='workout',isPr=post.kind==='pr',meta=post.metadata||{},kudos=post.activity_kudos||[],comments=post.activity_comments||[];
- const title=isPr?'Personal best':(post.title||'Workout');
- openSheet(`<div class="sheet-head"><div><p class="eyebrow">${isPr?'NEW PB':'WORKOUT DETAILS'}</p><h2>${escapeHtml(title)}</h2></div><button class="sheet-close" data-close>×</button></div><button class="activity-detail-owner" id="detail-owner">${avatarMarkup(p,'md')}<span><strong>${escapeHtml(p.display_name||p.username||'GAYM user')}</strong><small>@${escapeHtml(p.username||'user')} · ${new Date(post.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'long'})}</small></span></button>${isPr?`<article class="pr-detail-card"><span>PERSONAL BEST</span><h3>${escapeHtml(meta.exercise||post.title.replace(/^New PB · /,''))}</h3><strong>${Number(meta.weight)||0} kg × ${Number(meta.reps)||0} reps</strong></article>`:`<div class="workout-detail-summary"><span><b>${Number(meta.durationMin)||0}</b><small>MIN</small></span><span><b>${Number(meta.exerciseCount)||(meta.exercises||[]).length||'—'}</b><small>EXERCISES</small></span><span><b>${meta.detail_level==='full'?'FULL':meta.detail_level==='exercises'?'EXERCISES':'SUMMARY'}</b><small>SHARING</small></span></div>${workoutExerciseMarkup(meta)}${meta.prs?.length?`<div class="shared-prs"><p class="eyebrow">PBs IN THIS WORKOUT</p>${meta.prs.map(pr=>`<div><strong>${escapeHtml(pr.name)}</strong><span>${Number(pr.weight)||0} kg × ${Number(pr.reps)||0}</span></div>`).join('')}</div>`:''}`}<div class="activity-detail-actions"><button class="secondary ${kudos.some(k=>k.user_id===authUser?.id)?'active':''}" id="detail-kudos">♥ ${kudos.length} KUDOS</button><button class="secondary" id="detail-comment">COMMENT · ${comments.length}</button>${!mine&&socialCache.friends.some(f=>f.id===post.user_id)?`<button class="secondary" id="detail-motivate">MOTIVATE</button>`:''}</div>${comments.length?`<div class="detail-comments"><p class="eyebrow">COMMENTS</p>${comments.map(c=>`<div><strong>@${escapeHtml(c.profiles?.username||'friend')}</strong><span>${escapeHtml(c.body)}</span></div>`).join('')}</div>`:''}`);
+ const p=post.profiles||{},mine=post.user_id===authUser?.id,isWorkout=post.kind==='workout',isPr=post.kind==='pr',isNight=post.kind==='night_out',meta=post.metadata||{},kudos=post.activity_kudos||[],comments=post.activity_comments||[];
+ const title=isPr?'Personal best':isNight?'Night Out':(post.title||'Workout');
+ openSheet(`<div class="sheet-head"><div><p class="eyebrow">${isPr?'NEW PB':isNight?'NIGHT OUT':'WORKOUT DETAILS'}</p><h2>${escapeHtml(title)}</h2></div><button class="sheet-close" data-close>×</button></div><button class="activity-detail-owner" id="detail-owner">${avatarMarkup(p,'md')}<span><strong>${escapeHtml(p.display_name||p.username||'GAYM user')}</strong><small>@${escapeHtml(p.username||'user')} · ${new Date(post.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'long'})}</small></span></button>${isPr?`<article class="pr-detail-card"><span>PERSONAL BEST</span><h3>${escapeHtml(meta.exercise||post.title.replace(/^New PB · /,''))}</h3><strong>${Number(meta.weight)||0} kg × ${Number(meta.reps)||0} reps</strong></article>`:isNight?`<article class="night-out-detail-card"><span>TONIGHT</span><h3>${escapeHtml(meta.place||post.title.replace(/^Night Out · /,''))}</h3><p>${meta.location_type==='home'?'Home tonight.':'Out tonight.'}</p><small>Drink amounts, nutrition and alcohol logging are private.</small></article>`:`<div class="workout-detail-summary"><span><b>${Number(meta.durationMin)||0}</b><small>MIN</small></span><span><b>${Number(meta.exerciseCount)||(meta.exercises||[]).length||'—'}</b><small>EXERCISES</small></span><span><b>${meta.detail_level==='full'?'FULL':meta.detail_level==='exercises'?'EXERCISES':'SUMMARY'}</b><small>SHARING</small></span></div>${workoutExerciseMarkup(meta)}${meta.prs?.length?`<div class="shared-prs"><p class="eyebrow">PBs IN THIS WORKOUT</p>${meta.prs.map(pr=>`<div><strong>${escapeHtml(pr.name)}</strong><span>${Number(pr.weight)||0} kg × ${Number(pr.reps)||0}</span></div>`).join('')}</div>`:''}`}<div class="activity-detail-actions"><button class="secondary ${kudos.some(k=>k.user_id===authUser?.id)?'active':''}" id="detail-kudos">♥ ${kudos.length} KUDOS</button><button class="secondary" id="detail-comment">COMMENT · ${comments.length}</button>${!mine&&socialCache.friends.some(f=>f.id===post.user_id)?`<button class="secondary" id="detail-motivate">MOTIVATE</button>`:''}</div>${comments.length?`<div class="detail-comments"><p class="eyebrow">COMMENTS</p>${comments.map(c=>`<div><strong>@${escapeHtml(c.profiles?.username||'friend')}</strong><span>${escapeHtml(c.body)}</span></div>`).join('')}</div>`:''}`);
  $('#detail-owner').onclick=()=>{if(!mine){closeSheet();openUserProfile(post.user_id)}};$('#detail-kudos').onclick=async()=>{closeSheet();await toggleKudos(post.id)};$('#detail-comment').onclick=()=>{closeSheet();openCommentSheet(post.id)};const mot=$('#detail-motivate');if(mot)mot.onclick=()=>{closeSheet();openMotivateSheet(post.user_id,p)};
 }
 function openKudosSheet(postId){
@@ -2559,17 +2631,17 @@ function openKudosSheet(postId){
 }
 async function toggleKudos(postId){
  const post=activityPostCache.get(postId)||socialCache.feed.find(p=>p.id===postId);const has=post?.activity_kudos?.some(k=>k.user_id===authUser.id);
- const q=has?sb.from('activity_kudos').delete().eq('post_id',postId).eq('user_id',authUser.id):sb.from('activity_kudos').insert({post_id:postId,user_id:authUser.id});const {error}=await q;if(error)return toast(error.message);if(!has&&post?.user_id&&post.user_id!==authUser.id)await sendSocialNotification(post.user_id,'kudos','New Kudos',`${cloudProfile?.display_name||cloudProfile?.username||'A friend'} gave Kudos to your ${post.kind==='pr'?'PB':'workout'}.`,{post_id:postId},`kudos:${postId}:${authUser.id}`);await loadSocialState(true);const fresh=socialCache.feed.find(x=>x.id===postId);if(fresh)openActivityDetail(fresh);else if(post?.user_id&&post.user_id!==authUser.id)await openUserProfile(post.user_id);else profile();
+ const q=has?sb.from('activity_kudos').delete().eq('post_id',postId).eq('user_id',authUser.id):sb.from('activity_kudos').insert({post_id:postId,user_id:authUser.id});const {error}=await q;if(error)return toast(error.message);if(!has&&post?.user_id&&post.user_id!==authUser.id)await sendSocialNotification(post.user_id,'kudos','New Kudos',`${cloudProfile?.display_name||cloudProfile?.username||'A friend'} gave Kudos to your ${post.kind==='pr'?'PB':post.kind==='night_out'?'Night Out':'workout'}.`,{post_id:postId},`kudos:${postId}:${authUser.id}`);await loadSocialState(true);const fresh=socialCache.feed.find(x=>x.id===postId);if(fresh)openActivityDetail(fresh);else if(post?.user_id&&post.user_id!==authUser.id)await openUserProfile(post.user_id);else profile();
 }
 function openCommentSheet(postId){
- const post=activityPostCache.get(postId)||socialCache.feed.find(p=>p.id===postId);openSheet(`<div class="sheet-head"><div><p class="eyebrow">Comment</p><h2>${escapeHtml(post?.title||'Activity')}</h2></div><button class="sheet-close" data-close>×</button></div><div class="field"><label>Comment</label><textarea id="social-comment" maxlength="300" rows="4" placeholder="Strong work. Keep going."></textarea></div><div class="sheet-actions"><button class="primary" id="send-comment">POST COMMENT</button></div>`);$('#send-comment').onclick=async()=>{const body=$('#social-comment').value.trim();if(!body)return;const {error}=await sb.from('activity_comments').insert({post_id:postId,user_id:authUser.id,body});if(error)return toast(error.message);if(post?.user_id&&post.user_id!==authUser.id)await sendSocialNotification(post.user_id,'comment','New comment',`${cloudProfile?.display_name||cloudProfile?.username||'A friend'} commented on your ${post.kind==='pr'?'PB':'workout'}: “${body.slice(0,120)}”`,{post_id:postId});closeSheet();await loadSocialState(true);const fresh=socialCache.feed.find(x=>x.id===postId);if(fresh)openActivityDetail(fresh);else toast('Comment posted.')};
+ const post=activityPostCache.get(postId)||socialCache.feed.find(p=>p.id===postId);openSheet(`<div class="sheet-head"><div><p class="eyebrow">Comment</p><h2>${escapeHtml(post?.title||'Activity')}</h2></div><button class="sheet-close" data-close>×</button></div><div class="field"><label>Comment</label><textarea id="social-comment" maxlength="300" rows="4" placeholder="Strong work. Keep going."></textarea></div><div class="sheet-actions"><button class="primary" id="send-comment">POST COMMENT</button></div>`);$('#send-comment').onclick=async()=>{const body=$('#social-comment').value.trim();if(!body)return;const {error}=await sb.from('activity_comments').insert({post_id:postId,user_id:authUser.id,body});if(error)return toast(error.message);if(post?.user_id&&post.user_id!==authUser.id)await sendSocialNotification(post.user_id,'comment','New comment',`${cloudProfile?.display_name||cloudProfile?.username||'A friend'} commented on your ${post.kind==='pr'?'PB':post.kind==='night_out'?'Night Out':'workout'}: “${body.slice(0,120)}”`,{post_id:postId});closeSheet();await loadSocialState(true);const fresh=socialCache.feed.find(x=>x.id===postId);if(fresh)openActivityDetail(fresh);else toast('Comment posted.')};
 }
 async function openPrivacySettings(){
  const [{data:settings},{data:p}]=await Promise.all([sb.from('privacy_settings').select('*').eq('user_id',authUser.id).single(),sb.from('profiles').select('discoverable').eq('id',authUser.id).single()]);
  const option=(value,current,label)=>`<option value="${value}" ${current===value?'selected':''}>${label}</option>`;
  const row=(id,label,current)=>`<div class="field"><label>${label}</label><select id="${id}">${option('private',current,'Only me')}${option('friends',current,'Friends')}${option('public',current,'Everyone on GAYM')}</select></div>`;
  const details=settings?.workout_details_visibility||'full';
- openSheet(`<div class="sheet-head"><div><p class="eyebrow">Privacy</p><h2>You decide what leaves the locker room</h2></div><button class="sheet-close" data-close>×</button></div><label class="auto-target-row"><input id="privacy-discoverable" type="checkbox" ${p?.discoverable!==false?'checked':''}><span><strong>Let people find my profile</strong><small>Allows other GAYM users to search your name or username.</small></span></label>${row('privacy-workouts','Who can see workouts',settings?.workouts_visibility||'friends')}<div class="field"><label>Workout details</label><select id="privacy-workout-details">${option('summary',details,'Summary only · name, time, exercise count')}${option('exercises',details,'Exercises · names, no weights/reps')}${option('full',details,'Full sets & weights')}</select><small class="field-help">This controls what is actually uploaded into shared workout activity.</small></div>${row('privacy-prs','Personal bests',settings?.prs_visibility||'friends')}${row('privacy-streak','Training streak',settings?.streak_visibility||'friends')}<p class="science-note">Weight, body measurements, calories, nutrition logs and BottomCheck stay private.</p><div class="sheet-actions"><button class="primary" id="save-privacy">SAVE PRIVACY</button></div>`);
+ openSheet(`<div class="sheet-head"><div><p class="eyebrow">Privacy</p><h2>You decide what leaves the locker room</h2></div><button class="sheet-close" data-close>×</button></div><label class="auto-target-row"><input id="privacy-discoverable" type="checkbox" ${p?.discoverable!==false?'checked':''}><span><strong>Let people find my profile</strong><small>Allows other GAYM users to search your name or username.</small></span></label>${row('privacy-workouts','Who can see workouts',settings?.workouts_visibility||'friends')}<div class="field"><label>Workout details</label><select id="privacy-workout-details">${option('summary',details,'Summary only · name, time, exercise count')}${option('exercises',details,'Exercises · names, no weights/reps')}${option('full',details,'Full sets & weights')}</select><small class="field-help">This controls what is actually uploaded into shared workout activity.</small></div>${row('privacy-prs','Personal bests inside shared workouts',settings?.prs_visibility||'friends')}${row('privacy-streak','Training streak',settings?.streak_visibility||'friends')}<p class="science-note">PBs appear inside the workout card and never get a separate feed post. Their audience can never be wider than the workout itself. Weight, body measurements, calories, drink amounts, nutrition logs and BottomCheck stay private. Night Out sharing is chosen each time you activate it.</p><div class="sheet-actions"><button class="primary" id="save-privacy">SAVE PRIVACY</button></div>`);
  $('#save-privacy').onclick=async()=>{const update={workouts_visibility:$('#privacy-workouts').value,workout_history_visibility:$('#privacy-workouts').value,workout_details_visibility:$('#privacy-workout-details').value,prs_visibility:$('#privacy-prs').value,streak_visibility:$('#privacy-streak').value,updated_at:new Date().toISOString()};const [a,b]=await Promise.all([sb.from('privacy_settings').update(update).eq('user_id',authUser.id),sb.from('profiles').update({discoverable:$('#privacy-discoverable').checked,updated_at:new Date().toISOString()}).eq('id',authUser.id)]);if(a.error||b.error)return toast(a.error?.message||b.error?.message);await syncRecentActivitiesFromLocal();socialCacheUpdatedAt=0;closeSheet();toast('Privacy updated. Shared workouts were refreshed.');};
 }
 async function openSocialProfileEditor(){
@@ -2707,5 +2779,5 @@ let socialNotificationPoll=null;
 function startSocialNotificationPolling(){if(socialNotificationPoll)clearInterval(socialNotificationPoll);socialNotificationPoll=setInterval(()=>{if(authUser&&activeDataUserId===authUser.id)loadSocialNotifications(authUser.id)},30000)}
 
 function render(){evaluateNotifications();stopWorkoutClock();if(!entryUnlocked)return entry();if(route==='home')home();else if(route==='plan')plan();else if(route==='workout')workout();else if(route==='active')active();else if(route==='progress')progress();else if(route==='nutrition')nutrition();else if(route==='profile')profile();else home();}
-migrateProfile();if('scrollRestoration'in history)history.scrollRestoration='manual';window.addEventListener('beforeunload',persistActiveSession);window.addEventListener('pagehide',persistActiveSession);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistActiveSession();else if(route==='active'&&data.activeSession)render()});if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=65-workout-social',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));render();initializeCloud();
+migrateProfile();if('scrollRestoration'in history)history.scrollRestoration='manual';window.addEventListener('beforeunload',persistActiveSession);window.addEventListener('pagehide',persistActiveSession);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistActiveSession();else if(route==='active'&&data.activeSession)render()});if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=67-pb-merged',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));render();initializeCloud();
 })();
