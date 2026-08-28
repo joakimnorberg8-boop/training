@@ -473,3 +473,40 @@ button.timed-set-icon:focus-visible{outline:2px solid var(--pink,#ff4fa3);outlin
 .pump-check,.workout-photo-add{margin:16px 0;padding:14px;border-radius:18px;background:rgba(255,255,255,.035)}.pump-options{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.pump-options button{padding:11px;border-radius:13px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.035);color:var(--text);font-weight:800}.pump-options button.active{border-color:var(--pink);background:rgba(255,45,166,.13)}
 .home-intro.pride-mode{position:relative}.home-intro.pride-mode:after{content:"PRIDE MODE";display:inline-flex;margin-top:8px;font-size:9px;font-weight:900;letter-spacing:.14em;padding:5px 9px;border-radius:999px;background:linear-gradient(90deg,rgba(255,70,70,.2),rgba(255,190,70,.2),rgba(90,255,130,.2),rgba(70,160,255,.2),rgba(180,90,255,.2));border:1px solid rgba(255,255,255,.16)}
 @media(max-width:420px){.gay-week-grid{grid-template-columns:repeat(2,1fr)}.activity-actions{flex-wrap:wrap}.activity-actions>button{flex:1 1 30%}.drag-gym-card{align-items:flex-start;flex-direction:column}.drag-gym-card small{max-width:none;text-align:left}}
+
+
+/* v69: Friends Night Out radar + finish-workout mobile safety */
+.night-radar{padding:14px;overflow:visible}
+.night-radar .section-head{align-items:flex-start;margin-bottom:10px}
+.night-radar .section-head h3{margin:0;font-size:16px;line-height:1.15}
+.night-radar .section-head .eyebrow{font-size:8px;white-space:nowrap}
+.night-radar-list{display:grid;gap:6px}
+.night-radar-list>button{width:100%;min-width:0;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;border:1px solid var(--line);border-radius:13px;background:rgba(255,255,255,.025);color:inherit;padding:9px 10px;text-align:left}
+.night-radar-list>button>span{min-width:0}
+.night-radar-list strong,.night-radar-list small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.night-radar-list strong{font-size:11px}.night-radar-list small{margin-top:2px;color:var(--muted);font-size:9px}
+.night-radar-list b{color:var(--pink);font-size:17px}
+.night-radar-empty{padding:12px;border:1px dashed rgba(255,255,255,.12);border-radius:13px;background:rgba(255,255,255,.018)}
+.night-radar-empty strong,.night-radar-empty small{display:block}.night-radar-empty strong{font-size:11px}.night-radar-empty small{margin-top:4px;color:var(--muted);font-size:9px;line-height:1.45}
+.friends-head-after-radar{margin-top:18px}
+.finish-workout-sheet{max-height:calc(var(--visual-viewport-height,100dvh) - max(8px,env(safe-area-inset-top,0px)));padding-bottom:calc(34px + var(--safe-bottom));scroll-padding-bottom:calc(120px + var(--safe-bottom))}
+.finish-workout-sheet .finish-celebration{overflow:visible;padding-bottom:12px}
+.finish-workout-sheet .workout-photo-add{display:block;text-align:left;overflow:visible}
+.finish-workout-sheet .workout-photo-add>.photo-button{display:flex;align-items:center;justify-content:center;width:100%;min-height:46px;margin-top:8px;text-align:center}
+.finish-workout-sheet .workout-photo-add .auto-target-row{width:100%;min-width:0;align-items:flex-start;margin-top:10px;padding:11px}
+.finish-workout-sheet .workout-photo-add .auto-target-row>span{min-width:0;flex:1}
+.finish-workout-sheet .workout-photo-add .auto-target-row strong,.finish-workout-sheet .workout-photo-add .auto-target-row small{white-space:normal;overflow-wrap:anywhere}
+.finish-workout-sheet .workout-photo-add .auto-target-row small{font-size:9px;line-height:1.45}
+.finish-workout-sheet .profile-save-status{min-height:18px;margin-top:7px;font-size:10px}
+.finish-workout-sheet .sheet-actions{padding-bottom:8px}
+@media(max-width:390px){
+ .finish-workout-sheet{padding-left:12px;padding-right:12px}
+ .finish-workout-sheet .finish-celebration>h2{font-size:24px}
+ .finish-workout-sheet .finish-stats{gap:5px}
+ .finish-workout-sheet .finish-stats span{min-height:58px}
+ .finish-workout-sheet .pump-check,.finish-workout-sheet .workout-photo-add{padding:12px;margin:12px 0}
+ .finish-workout-sheet .pump-options{grid-template-columns:1fr 1fr}
+}
+/* v69 audit fix: reactions added a third action in v68, so keep all three on one row. */
+.activity-actions{grid-template-columns:repeat(3,minmax(0,1fr))}
+.activity-actions button{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
