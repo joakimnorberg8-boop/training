@@ -1,16 +1,17 @@
 (()=>{
 'use strict';
-// GAYM v60: focused profile-image persistence fix on top of v59 stable.
+// GAYM v62: social polish, durable profile save and cross-app social notifications.
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 
 const SUPABASE_URL='https://dkiejeckkwzowpkxapbc.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_eJGKDkbbHEU5UVfDPVVNRQ_OUPWKaVZ';
 const sb=window.supabase?.createClient?.(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}})||null;
 let authUser=null,cloudProfile=null,cloudBooting=true,authMode='login',socialTab='activity';
+const activityPostCache=new Map();
 const SOCIAL_PROFILE_CACHE_PREFIX='gaymSocialProfileV2:user:';
 function cachedCloudProfile(userId){if(!userId)return null;try{const p=JSON.parse(localStorage.getItem(`${SOCIAL_PROFILE_CACHE_PREFIX}${userId}`)||'null');return p?.id===userId?p:null}catch{return null}}
 function cacheCloudProfile(p){if(p?.id)try{localStorage.setItem(`${SOCIAL_PROFILE_CACHE_PREFIX}${p.id}`,JSON.stringify(p))}catch{}}
-let socialCache={friends:[],requests:[],feed:[],sharedRecipes:[]};
+let socialCache={friends:[],requests:[],feed:[],sharedRecipes:[],notifications:[]};
 let activeDataUserId=null,authEpoch=0;
 
 const icons={home:'<svg viewBox="0 0 24 24"><path d="M3 10.8 12 3l9 7.8v9.2a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg>',plan:'<svg viewBox="0 0 24 24"><path d="M6 3v3M18 3v3M4 8h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1z"/><path d="M8 12h3M8 16h3M14 12h2M14 16h2"/></svg>',workout:'<svg viewBox="0 0 24 24"><path d="M6 8v8M18 8v8M3 10v4M21 10v4M6 12h12"/></svg>',progress:'<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',profile:'<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c.8-4 3.5-6 8-6s7.2 2 8 6"/></svg>',bell:'<svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>',plus:'<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',back:'<svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>',dots:'<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none"/></svg>'};
@@ -215,7 +216,8 @@ function nav(){return `<nav class="bottom-nav">${[['home','Home'],['plan','Plan'
 function shell(content){$('#app').innerHTML=`<main class="screen">${content}</main>${nav()}`; bindGlobal()}
 function bindGlobal(){$$('[data-route]').forEach(b=>b.onclick=()=>go(b.dataset.route));$$('[data-action="notify"]').forEach(b=>b.onclick=openNotifications);$$('[data-session-id]').forEach(b=>b.onclick=()=>openSessionDetail(b.dataset.sessionId));}
 function go(r,args={}){route=r;routeArgs=args;render();requestAnimationFrame(()=>window.scrollTo({top:0,left:0,behavior:'auto'}))}
-function header(title='',back=false){return `<header class="topbar">${back?`<button class="icon-btn" data-back>${icons.back}</button>`:`<div class="brand">GA<i>Y</i>M</div>`}<strong>${escapeHtml(title)}</strong>${back?`<span style="width:42px"></span>`:`<button class="icon-btn" data-action="notify">${icons.bell}</button>`}</header>`}
+function socialUnreadCount(){return (socialCache.notifications||[]).filter(n=>!n.read_at).length}
+function header(title='',back=false){const unread=socialUnreadCount();return `<header class="topbar">${back?`<button class="icon-btn" data-back>${icons.back}</button>`:`<div class="brand">GA<i>Y</i>M</div>`}<strong>${escapeHtml(title)}</strong>${back?`<span style="width:42px"></span>`:`<button class="icon-btn notification-bell" data-action="notify">${icons.bell}${unread?`<b class="notification-badge">${Math.min(unread,9)}${unread>9?'+':''}</b>`:''}</button>`}</header>`}
 
 function notificationSettings(){return Object.assign({workout:true,nutrition:true,progress:true,dailySass:true,unhinged:true,dailyTime:'09:00',nutritionTime:'19:00'},data.notificationSettings||{})}
 function notificationText(clean,sassy){return notificationSettings().unhinged?sassy:clean}
@@ -225,7 +227,18 @@ function queueNotification({kind='general',title='GAYM',body='',route='home',arg
  const n={id:uid(),kind,title,body,route,args,createdAt:Date.now(),read:false,dedupeKey};
  data.notifications.unshift(n);data.notifications=data.notifications.slice(0,50);save();return n;
 }
-function navigateNotification(n){
+async function markSocialNotificationRead(id){
+ if(!sb||!authUser||!id)return;
+ const n=(socialCache.notifications||[]).find(x=>x.id===id);if(n)n.read_at=new Date().toISOString();
+ const {error}=await sb.from('social_notifications').update({read_at:new Date().toISOString()}).eq('id',id).eq('recipient_id',authUser.id);
+ if(error)console.error('mark social notification read',error);
+ refreshBellBadge();
+}
+function refreshBellBadge(){
+ const count=socialUnreadCount();$$('[data-action="notify"]').forEach(btn=>{let b=btn.querySelector('.notification-badge');if(count){if(!b){b=document.createElement('b');b.className='notification-badge';btn.appendChild(b)}b.textContent=`${Math.min(count,9)}${count>9?'+':''}`}else b?.remove()});
+}
+async function navigateNotification(n){
+ if(n.social){await markSocialNotificationRead(n.id);closeSheet();if(n.kind==='friend_request'){socialTab='friends';go('profile');return}if(n.actor_id&&n.actor_id!==authUser?.id){openUserProfile(n.actor_id);return}go('home');return}
  n.read=true;save();closeSheet();
  if(n.route==='progress-exercise'){go('progress');requestAnimationFrame(()=>setTimeout(()=>openExerciseProgress(n.args?.name),80));return}
  if(n.route==='nutrition'){go('nutrition');return}
@@ -233,12 +246,25 @@ function navigateNotification(n){
  if(n.route==='workout'){go('workout');return}
  go(n.route||'home',n.args||{});
 }
-function openNotifications(){
- evaluateNotifications();
- const list=(data.notifications||[]);
- openSheet(`<div class="sheet-head"><div><p class="eyebrow">Notifications</p><h2>GAYM has opinions</h2></div><button class="sheet-close" data-close>×</button></div>${list.length?`<div class="notification-list">${list.map(n=>`<button class="notification-card ${n.read?'':'unread'}" data-notification="${n.id}"><span class="notification-dot"></span><span class="grow"><strong>${escapeHtml(n.title)}</strong><p>${escapeHtml(n.body)}</p><small>${new Date(n.createdAt).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</small></span><span class="chev">›</span></button>`).join('')}</div><button class="text-btn notification-clear" id="notification-clear">CLEAR ALL</button>`:`<div class="empty"><strong>No notifications</strong>Your unicorn is currently minding its own business. Suspicious.</div>`}`);
- $$('[data-notification]').forEach(b=>b.onclick=()=>{const n=(data.notifications||[]).find(x=>x.id===b.dataset.notification);if(n)navigateNotification(n)});
- const clear=$('#notification-clear');if(clear)clear.onclick=()=>{data.notifications=[];save();openNotifications()};
+async function loadSocialNotifications(expectedUserId=activeDataUserId){
+ if(!sb||!authUser||!expectedUserId||authUser.id!==expectedUserId)return;
+ const {data:rows,error}=await sb.from('social_notifications').select('id,recipient_id,actor_id,kind,title,body,metadata,read_at,created_at,actor:profiles!social_notifications_actor_id_fkey(id,username,display_name,avatar_url)').eq('recipient_id',expectedUserId).order('created_at',{ascending:false}).limit(50);
+ if(error){if(error.code!=='42P01')console.error('load social notifications',error);return}
+ if(authUser?.id!==expectedUserId||activeDataUserId!==expectedUserId)return;
+ socialCache.notifications=rows||[];refreshBellBadge();
+}
+async function sendSocialNotification(recipientId,kind,title,body,metadata={},dedupeKey=null){
+ const sender=authUser?.id;if(!sb||!sender||!recipientId||sender===recipientId)return {error:null};
+ const row={recipient_id:recipientId,actor_id:sender,kind,title,body,metadata,dedupe_key:dedupeKey};
+ const {error}=await sb.from('social_notifications').insert(row);if(error&&error.code!=='23505')console.error('send social notification',error);return {error};
+}
+async function openNotifications(){
+ evaluateNotifications();await loadSocialNotifications();
+ const cloud=(socialCache.notifications||[]).map(n=>({id:n.id,social:true,kind:n.kind,title:n.title,body:n.body,createdAt:new Date(n.created_at).getTime(),read:!!n.read_at,actor_id:n.actor_id,actor:n.actor}));
+ const list=[...cloud,...(data.notifications||[])].sort((a,b)=>b.createdAt-a.createdAt);
+ openSheet(`<div class="sheet-head"><div><p class="eyebrow">Notifications</p><h2>Your GAYM circle</h2></div><button class="sheet-close" data-close>×</button></div>${list.length?`<div class="notification-list">${list.map(n=>`<button class="notification-card ${n.read?'':'unread'}" data-notification="${n.id}" data-social-notification="${n.social?'1':'0'}"><span class="notification-dot"></span><span class="grow"><strong>${escapeHtml(n.title)}</strong><p>${escapeHtml(n.body)}</p><small>${new Date(n.createdAt).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</small></span><span class="chev">›</span></button>`).join('')}</div><button class="text-btn notification-clear" id="notification-clear">CLEAR ALL</button>`:`<div class="empty"><strong>No notifications</strong>Your unicorn is currently minding its own business. Suspicious.</div>`}`);
+ $$('[data-notification]').forEach(b=>b.onclick=()=>{const id=b.dataset.notification;const n=b.dataset.socialNotification==='1'?cloud.find(x=>x.id===id):(data.notifications||[]).find(x=>x.id===id);if(n)navigateNotification(n)});
+ const clear=$('#notification-clear');if(clear)clear.onclick=async()=>{data.notifications=[];save();if(sb&&authUser){const ids=(socialCache.notifications||[]).map(n=>n.id);if(ids.length){const {error}=await sb.from('social_notifications').delete().eq('recipient_id',authUser.id).in('id',ids);if(error)console.error('clear social notifications',error)}socialCache.notifications=[]}refreshBellBadge();openNotifications()};
 }
 function notificationTimeReached(hhmm){const [h,m]=(hhmm||'00:00').split(':').map(Number),now=new Date();return now.getHours()>h||(now.getHours()===h&&now.getMinutes()>=m)}
 function evaluateNotifications(){
@@ -1534,7 +1560,7 @@ function openLogCardio(prefill={}){
  $$('[data-cardio-intensity]').forEach(b=>b.onclick=()=>{selectedIntensity=b.dataset.cardioIntensity;$$('[data-cardio-intensity]').forEach(x=>x.classList.toggle('active',x===b));updatePreview()});
  ['cardio-log-activity','cardio-log-duration','cardio-log-distance'].forEach(id=>$('#'+id)?.addEventListener('input',updatePreview));
  $('#cardio-log-activity')?.addEventListener('change',updatePreview);updatePreview();
- $('#cardio-log-save').onclick=()=>{const mode=$('#cardio-log-activity').value,durationMin=Math.round(Number($('#cardio-log-duration').value)||0),distanceKm=Math.max(0,Number($('#cardio-log-distance').value)||0),notes=$('#cardio-log-notes').value.trim();if(durationMin<1)return toast('Add the cardio duration first');const id=uid(),derived=cardioDerivedMeta(mode,durationMin,distanceKm);const finished={id,date:prefill.date||isoToday(),workoutId:prefill.workoutId||'',program:prefill.program||'',programDay:prefill.programDay??null,name:mode,type:'cardio',mode,durationMin,distance:distanceKm||0,intensity:selectedIntensity,notes,manualEntry:true,cardioLogVersion:2,derived,items:[],doneSets:0,totalSets:0,finishedAt:Date.now(),completed:true};if(!(data.sessions||[]).some(x=>x.id===id))data.sessions.push(finished);save();closeSheet();render();actionToast(`${mode} logged`,'UNDO',()=>{data.sessions=data.sessions.filter(x=>x.id!==id);save();render();toast('Cardio removed')})};
+ $('#cardio-log-save').onclick=()=>{const mode=$('#cardio-log-activity').value,durationMin=Math.round(Number($('#cardio-log-duration').value)||0),distanceKm=Math.max(0,Number($('#cardio-log-distance').value)||0),notes=$('#cardio-log-notes').value.trim();if(durationMin<1)return toast('Add the cardio duration first');const id=uid(),derived=cardioDerivedMeta(mode,durationMin,distanceKm);const finished={id,date:prefill.date||isoToday(),workoutId:prefill.workoutId||'',program:prefill.program||'',programDay:prefill.programDay??null,name:mode,type:'cardio',mode,durationMin,distance:distanceKm||0,intensity:selectedIntensity,notes,manualEntry:true,cardioLogVersion:2,derived,items:[],doneSets:0,totalSets:0,finishedAt:Date.now(),completed:true};if(!(data.sessions||[]).some(x=>x.id===id))data.sessions.push(finished);save();syncRecentActivitiesFromLocal();closeSheet();render();actionToast(`${mode} logged`,'UNDO',async()=>{const userId=activeDataUserId;data.sessions=data.sessions.filter(x=>x.id!==id);save();await deleteActivityForSession(id,userId);render();toast('Cardio removed')})};
 }
 
 function openWorkoutSheet(id){const w=data.customWorkouts.find(w=>w.id===id);if(!w)return;openSheet(`<div class="sheet-head"><div><p class="eyebrow">${w.type}</p><h2>${escapeHtml(w.name)}</h2></div><button class="sheet-close" data-close>×</button></div><p class="subtle">${w.type==='cardio'?`${w.duration||30} min${w.distance?` · ${w.distance} km`:''}`:`${w.items?.length||0} exercises`}</p><div class="list">${(w.items||[]).map((x,i)=>`<div class="list-card"><span class="badge-icon">${i+1}</span><span class="grow"><h3>${escapeHtml(x.name)}</h3><p>${x.sets||3} sets${x.reps?` · ${x.reps} reps`:''}</p></span></div>`).join('')}</div><div class="sheet-actions"><button class="primary" id="sheet-start">${w.type==='cardio'?'LOG CARDIO':'START WORKOUT'}</button><button class="secondary" id="sheet-edit">EDIT</button><button class="danger-btn" id="sheet-delete">DELETE</button></div>`);$('#sheet-start').onclick=()=>{closeSheet();startWorkout(id)};$('#sheet-edit').onclick=()=>{closeSheet();w.type==='cardio'?openCardioTemplateBuilder(id):openBuilder(w.type,id)};$('#sheet-delete').onclick=()=>{data.customWorkouts=data.customWorkouts.filter(x=>x.id!==id);data.planned=data.planned.filter(x=>x.workoutId!==id);save();closeSheet();render();toast('Workout deleted')}}
@@ -2080,9 +2106,9 @@ function active(){
  $$('.session-exercise').forEach(details=>details.addEventListener('toggle',()=>{if(details.open)activeExerciseOpen=+details.dataset.exerciseIndex}));
 }
 function finishSession(){const s=data.activeSession;if(!s)return;finalizeSession()}
-function undoFinishedSession(finished){
+async function undoFinishedSession(finished){
  if(data.activeSession||!(data.sessions||[]).some(x=>x.id===finished.id))return toast('Workout can no longer be reopened');
- data.sessions=data.sessions.filter(x=>x.id!==finished.id);const restored=structuredClone(finished);delete restored.finishedAt;delete restored.durationMin;delete restored.doneSets;delete restored.totalSets;delete restored.completed;delete restored.prs;data.activeSession=restored;recomputePRHistory({notifyNew:false});save();go('active');toast('Workout reopened');
+ const userId=activeDataUserId;data.sessions=data.sessions.filter(x=>x.id!==finished.id);await deleteActivityForSession(finished.id,userId);const restored=structuredClone(finished);delete restored.finishedAt;delete restored.durationMin;delete restored.doneSets;delete restored.totalSets;delete restored.completed;delete restored.prs;data.activeSession=restored;recomputePRHistory({notifyNew:false});save();go('active');toast('Workout reopened');
 }
 function finalizeSession(overrides={}){const s=data.activeSession;if(!s)return;const durationMin=overrides.durationMin||sessionDurationMinutes(s);let doneSets=0,totalSets=0;if(s.type!=='cardio')s.items.forEach(x=>x.sets.forEach(z=>{totalSets++;if(z.done)doneSets++}));const comment=completionSass(s,durationMin,doneSets,totalSets);const finished={...s,...overrides,durationMin,doneSets,totalSets,finishedAt:Date.now(),completed:true};if((data.sessions||[]).some(x=>x.id===finished.id)){data.activeSession=null;save();return go('home')}data.sessions.push(finished);data.activeSession=null;recomputePRHistory({notifyNew:true});save();syncRecentActivitiesFromLocal();stopWorkoutClock();const savedFinished=data.sessions.find(x=>x.id===finished.id)||finished,prs=savedFinished.prs||[],completionText=totalSets?` · ${doneSets}/${totalSets} sets`:savedFinished.distance?` · ${savedFinished.distance} km`:'';const next=nextTimeSummary(savedFinished),coachTips=sessionCoachSummary(savedFinished),finishLine=prs.length?voicePick(GAYM_VOICE.pr,`finish-pr-${savedFinished.id}`):comment;openSheet(`<div class="finish-celebration ${prs.length?'has-pr':''}"><div class="finish-burst" aria-hidden="true"><span>✦</span><span>✧</span><span>✦</span></div><p class="eyebrow">${prs.length?'PERSONAL BEST':'WORKOUT COMPLETE'}</p><h2>${escapeHtml(savedFinished.name||'Workout')} complete</h2><p class="finish-sass">${escapeHtml(finishLine)}</p><div class="finish-stats"><span><b>${durationMin}</b><small>MIN</small></span>${totalSets?`<span><b>${doneSets}/${totalSets}</b><small>SETS</small></span>`:''}<span><b>${(savedFinished.items||[]).length||0}</b><small>EXERCISES</small></span></div>${prs.length?`<div class="finish-pr-card"><span>NEW PB${prs.length>1?'S':''}</span>${prs.slice(0,3).map(pr=>`<div><strong>${escapeHtml(pr.name)}</strong><b>${Number(pr.weight)} kg × ${Number(pr.reps)}</b></div>`).join('')}</div>`:''}${next.length?`<div class="next-time-card"><p class="eyebrow">NEXT TIME</p>${next.map(x=>`<div><span><strong>${escapeHtml(x.name)}</strong><small>${escapeHtml(x.current)}</small></span><b>${escapeHtml(x.next)}</b></div>`).join('')}</div>`:''}<div class="post-coach-insights"><p class="eyebrow">GAYM COACH</p>${coachTips.map(x=>`<p>${escapeHtml(x)}</p>`).join('')}</div><div class="sheet-actions"><button class="primary" id="finish-home">BACK TO HOME</button><button class="secondary" id="finish-progress">VIEW PROGRESS</button></div></div>`);$('#finish-home').onclick=()=>{closeSheet();go('home');actionToast('Workout completed','UNDO',()=>undoFinishedSession(finished))};$('#finish-progress').onclick=()=>{closeSheet();go('progress')}}
 
@@ -2127,7 +2153,7 @@ function openSessionDetail(id){
  openSheet(`<div class="sheet-head"><div><p class="eyebrow">${s.date} · ${s.type}${s.manualEntry?' · manually logged':''}</p><h2>${escapeHtml(s.name)}</h2></div><button class="sheet-close" data-close>×</button></div><div class="metric-grid" style="margin-top:14px"><div class="metric"><span>Duration</span><strong>${s.durationMin||0} min</strong></div><div class="metric"><span>${s.type==='cardio'?'Distance':'Sets completed'}</span><strong>${s.type==='cardio'?(s.distance?`${s.distance} km`:'–'):(s.doneSets||0)+' / '+(s.totalSets||0)}</strong></div>${s.type==='cardio'?`<div class="metric"><span>Intensity</span><strong>${escapeHtml(s.intensity||'–')}</strong></div><div class="metric"><span>${/cycling/i.test(s.mode||s.name)?'Speed':'Pace'}</span><strong>${escapeHtml(s.derived||cardioDerivedMeta(s.mode||s.name,s.durationMin,s.distance)||'–')}</strong></div>`:''}</div>${cardioItems}${strengthItems}${s.notes?`<article class="card history-notes"><span class="eyebrow">Notes</span><p>${escapeHtml(s.notes)}</p></article>`:''}<div class="sheet-actions"><button class="danger-btn" id="delete-history-workout">DELETE WORKOUT</button></div>`);
  $('#delete-history-workout').onclick=()=>confirmDeleteSession(s.id);
 }
-function confirmDeleteSession(id){const s=data.sessions.find(x=>x.id===id);if(!s)return;openSheet(`<div class="sheet-head"><div><p class="eyebrow">Delete workout?</p><h2>${escapeHtml(s.name)}</h2></div><button class="sheet-close" data-close>×</button></div><p class="subtle">This removes the workout from History, your calendar and exercise progress. This cannot be undone.</p><div class="sheet-actions two"><button class="secondary" data-close>KEEP IT</button><button class="danger-btn" id="confirm-delete-session">DELETE WORKOUT</button></div>`);$('#confirm-delete-session').onclick=()=>{data.sessions=data.sessions.filter(x=>x.id!==id);recomputePRHistory({notifyNew:false});save();closeSheet();render();toast('Workout deleted · progress recalculated')}}
+function confirmDeleteSession(id){const s=data.sessions.find(x=>x.id===id);if(!s)return;openSheet(`<div class="sheet-head"><div><p class="eyebrow">Delete workout?</p><h2>${escapeHtml(s.name)}</h2></div><button class="sheet-close" data-close>×</button></div><p class="subtle">This removes the workout from History, your calendar, exercise progress and Friends Activity. This cannot be undone.</p><div class="sheet-actions two"><button class="secondary" data-close>KEEP IT</button><button class="danger-btn" id="confirm-delete-session">DELETE WORKOUT</button></div>`);$('#confirm-delete-session').onclick=async()=>{const userId=activeDataUserId;data.sessions=data.sessions.filter(x=>x.id!==id);recomputePRHistory({notifyNew:false});save();const btn=$('#confirm-delete-session');if(btn){btn.disabled=true;btn.textContent='DELETING…'}const cloud=await deleteActivityForSession(id,userId);await syncRecentActivitiesFromLocal(userId);closeSheet();render();toast(cloud?.error?'Workout deleted · activity sync will retry':'Workout deleted everywhere')}}
 function openHistorySheet(){
  openSheet(`<div class="sheet-head"><div><p class="eyebrow">Activity</p><h2>Workout history</h2></div><button class="sheet-close" data-close>×</button></div><p class="subtle">To add a forgotten workout, open My Plan and tap today or any earlier date.</p><div class="list" style="margin-top:14px">${data.sessions.length?sortedSessionsDesc().map(sessionCard).join(''):`<div class="empty">No workouts yet.</div>`}</div>`);
  $$('[data-session-id]').forEach(b=>b.onclick=()=>openSessionDetail(b.dataset.sessionId));
@@ -2162,7 +2188,7 @@ function openPastWorkoutSheet(initialDate=isoToday(),draft=null){
  $$('[data-past-remove-ex]').forEach(b=>b.onclick=()=>{capture();state.items.splice(+b.dataset.pastRemoveEx,1);openPastWorkoutSheet(state.date,state)});
  if($('#past-add-cardio'))$('#past-add-cardio').onclick=()=>{capture();state.cardioActivities.push(pastEmptyCardioActivity('Cycling'));openPastWorkoutSheet(state.date,state)};
  $$('[data-past-remove-cardio]').forEach(b=>b.onclick=()=>{capture();state.cardioActivities.splice(+b.dataset.pastRemoveCardio,1);if(!state.cardioActivities.length)state.cardioActivities=[pastEmptyCardioActivity('Running')];openPastWorkoutSheet(state.date,state)});
- $('#save-past-workout').onclick=()=>{capture();const date=state.date,name=state.name.trim();if(!date||date>isoToday())return toast('Choose a valid date');if(!name)return toast('Give the workout a name');let items=[],doneSets=0,totalSets=0,distance=0,mode='',durationMin=Math.max(1,Math.round(Number(state.durationMin)||0));if(state.type==='cardio'){const acts=state.cardioActivities.filter(a=>a.mode);if(!acts.length)return toast('Add at least one cardio activity');const activityMinutes=acts.reduce((n,a)=>n+(Number(a.durationMin)||0),0);if(activityMinutes>0)durationMin=Math.round(activityMinutes);distance=Math.round(acts.reduce((n,a)=>n+(Number(a.distance)||0),0)*100)/100;mode=acts.length===1?acts[0].mode:'Mixed cardio';items=acts.map(a=>({name:a.mode,muscle:'Cardio',equipment:'',durationMin:Number(a.durationMin)||0,distance:Number(a.distance)||0,sets:[]}))}else{if(!state.items.length)return toast('Add at least one exercise');items=state.items.map(x=>({...x,sets:x.sets.map(z=>({...z,done:true}))}));totalSets=items.reduce((n,x)=>n+x.sets.length,0);doneSets=totalSets}const startedAt=new Date(`${date}T12:00:00`).getTime(),manualSession={id:uid(),workoutId:state.templateId||'',name,type:state.type,date,durationMin,distance,mode,notes:state.notes.trim(),items,doneSets,totalSets,startedAt,finishedAt:startedAt+durationMin*60000,completed:true,manualEntry:true};data.sessions.push(manualSession);recomputePRHistory({notifyNew:true});save();closeSheet();render();toast((manualSession.prs||[]).length?'Workout added · PB history updated':'Workout added to history')};
+ $('#save-past-workout').onclick=()=>{capture();const date=state.date,name=state.name.trim();if(!date||date>isoToday())return toast('Choose a valid date');if(!name)return toast('Give the workout a name');let items=[],doneSets=0,totalSets=0,distance=0,mode='',durationMin=Math.max(1,Math.round(Number(state.durationMin)||0));if(state.type==='cardio'){const acts=state.cardioActivities.filter(a=>a.mode);if(!acts.length)return toast('Add at least one cardio activity');const activityMinutes=acts.reduce((n,a)=>n+(Number(a.durationMin)||0),0);if(activityMinutes>0)durationMin=Math.round(activityMinutes);distance=Math.round(acts.reduce((n,a)=>n+(Number(a.distance)||0),0)*100)/100;mode=acts.length===1?acts[0].mode:'Mixed cardio';items=acts.map(a=>({name:a.mode,muscle:'Cardio',equipment:'',durationMin:Number(a.durationMin)||0,distance:Number(a.distance)||0,sets:[]}))}else{if(!state.items.length)return toast('Add at least one exercise');items=state.items.map(x=>({...x,sets:x.sets.map(z=>({...z,done:true}))}));totalSets=items.reduce((n,x)=>n+x.sets.length,0);doneSets=totalSets}const startedAt=new Date(`${date}T12:00:00`).getTime(),manualSession={id:uid(),workoutId:state.templateId||'',name,type:state.type,date,durationMin,distance,mode,notes:state.notes.trim(),items,doneSets,totalSets,startedAt,finishedAt:startedAt+durationMin*60000,completed:true,manualEntry:true};data.sessions.push(manualSession);recomputePRHistory({notifyNew:true});save();syncRecentActivitiesFromLocal();closeSheet();render();toast((manualSession.prs||[]).length?'Workout added · PB history updated':'Workout added to history')};
 }
 function measurementValue(entry,key){const v=entry?.[key];return v===null||v===undefined||v===''?null:Number(v)}
 function measurementDateLabel(date){if(!date)return 'No previous log';const d=new Date(`${date}T12:00:00`);return Number.isNaN(d.getTime())?date:d.toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'})}
@@ -2305,22 +2331,22 @@ async function hydrateCloudProfile(expectedUserId=authUser?.id){
 async function enterAuthenticatedAccount(user){
  if(!user?.id)return;
  const token=++authEpoch,userId=user.id;
- authUser=user;entryUnlocked=false;cloudProfile=cachedCloudProfile(userId);socialCache={friends:[],requests:[],feed:[],sharedRecipes:[]};
+ authUser=user;entryUnlocked=false;cloudProfile=cachedCloudProfile(userId);socialCache={friends:[],requests:[],feed:[],sharedRecipes:[],notifications:[]};
  switchAccountLocalData(userId);
  await hydrateCloudProfile(userId);
  if(token!==authEpoch||authUser?.id!==userId||activeDataUserId!==userId)return;
  entryUnlocked=true;
- await syncRecentActivitiesFromLocal(userId);
+ await Promise.all([syncRecentActivitiesFromLocal(userId),loadSocialNotifications(userId)]);
 }
 function leaveAuthenticatedAccount(){
- ++authEpoch;authUser=null;activeDataUserId=null;cloudProfile=null;data=structuredClone(defaults);normalizeLocalData();entryUnlocked=false;socialCache={friends:[],requests:[],feed:[],sharedRecipes:[]};route='home';routeArgs={};
+ ++authEpoch;authUser=null;activeDataUserId=null;cloudProfile=null;data=structuredClone(defaults);normalizeLocalData();entryUnlocked=false;socialCache={friends:[],requests:[],feed:[],sharedRecipes:[],notifications:[]};route='home';routeArgs={};
 }
 async function initializeCloud(){
  if(!sb){cloudBooting=false;render();return}
  try{
   const {data:r}=await sb.auth.getSession();
   if(r.session?.user)await enterAuthenticatedAccount(r.session.user);else leaveAuthenticatedAccount();
- }catch(e){console.error('initializeCloud',e);leaveAuthenticatedAccount()}finally{cloudBooting=false;render()}
+ }catch(e){console.error('initializeCloud',e);leaveAuthenticatedAccount()}finally{cloudBooting=false;render();startSocialNotificationPolling()}
  sb.auth.onAuthStateChange((_event,session)=>{
   setTimeout(async()=>{
    try{if(session?.user)await enterAuthenticatedAccount(session.user);else leaveAuthenticatedAccount()}catch(e){console.error('auth state change',e)}
@@ -2339,22 +2365,32 @@ function sessionSocialSummary(sess){
  const duration=Math.max(0,Math.round(Number(sess.durationMin||sess.duration||0)));
  return {title:`Completed ${name}`,body:[duration?`${duration} min`:null,exCount?`${exCount} exercises`:null].filter(Boolean).join(' · ')||'Workout completed'};
 }
+async function deleteActivityForSession(sessionId,expectedUserId=activeDataUserId){
+ if(!sb||!authUser||!sessionId||!expectedUserId||authUser.id!==expectedUserId||activeDataUserId!==expectedUserId)return {error:null};
+ return sb.from('activity_posts').delete().eq('user_id',expectedUserId).eq('kind','workout').eq('source_id',String(sessionId));
+}
 async function syncRecentActivitiesFromLocal(expectedUserId=activeDataUserId){
  if(!sb||!authUser||!expectedUserId||authUser.id!==expectedUserId||activeDataUserId!==expectedUserId)return;
- const sessionsSnapshot=structuredClone(data.sessions||[]);
+ const sessionsSnapshot=structuredClone(data.sessions||[]).filter(Boolean);
  const privacy=await sb.from('privacy_settings').select('workouts_visibility').eq('user_id',expectedUserId).maybeSingle();
  if(authUser?.id!==expectedUserId||activeDataUserId!==expectedUserId)return;
 
  const vis=privacy.data?.workouts_visibility||'friends';
- const rows=sessionsSnapshot.slice(-60).filter(Boolean).map(sess=>{const x=sessionSocialSummary(sess);return {user_id:expectedUserId,kind:'workout',source_id:String(sess.id||`${sess.date}-${sess.name||sess.type||'workout'}`),title:x.title,body:x.body,metadata:{date:sess.date||null,type:sess.type||'strength'},visibility:vis,created_at:sess.finishedAt?new Date(sess.finishedAt).toISOString():(sess.date?`${sess.date}T12:00:00Z`:new Date().toISOString()),updated_at:new Date().toISOString()}});
- if(rows.length)await sb.from('activity_posts').upsert(rows,{onConflict:'user_id,kind,source_id',ignoreDuplicates:false});
+ const rows=sessionsSnapshot.map(sess=>{const x=sessionSocialSummary(sess);return {user_id:expectedUserId,kind:'workout',source_id:String(sess.id||`${sess.date}-${sess.name||sess.type||'workout'}`),title:x.title,body:x.body,metadata:{date:sess.date||null,type:sess.type||'strength'},visibility:vis,created_at:sess.finishedAt?new Date(sess.finishedAt).toISOString():(sess.date?`${sess.date}T12:00:00Z`:new Date().toISOString()),updated_at:new Date().toISOString()}});
+ if(rows.length){const up=await sb.from('activity_posts').upsert(rows,{onConflict:'user_id,kind,source_id',ignoreDuplicates:false});if(up.error)console.error('activity sync upsert',up.error)}
+ if(authUser?.id!==expectedUserId||activeDataUserId!==expectedUserId)return;
+ const {data:remote,error:remoteError}=await sb.from('activity_posts').select('id,source_id').eq('user_id',expectedUserId).eq('kind','workout');
+ if(remoteError){console.error('activity sync reconcile',remoteError);return}
+ const localIds=new Set(rows.map(r=>String(r.source_id)));
+ const staleIds=(remote||[]).filter(r=>!localIds.has(String(r.source_id))).map(r=>r.id);
+ if(staleIds.length){const del=await sb.from('activity_posts').delete().in('id',staleIds);if(del.error)console.error('activity sync delete stale',del.error)}
 }
 async function loadSocialState(){
  if(!sb||!authUser||!activeDataUserId||authUser.id!==activeDataUserId)return;
  const userId=authUser.id;
  const [{data:rels},{data:posts},{data:shares}]=await Promise.all([
   sb.from('friendships').select('*').or(`requester_id.eq.${userId},addressee_id.eq.${userId}`),
-  sb.from('activity_posts').select('*,profiles:user_id(id,username,display_name,avatar_url),activity_kudos(user_id),activity_comments(id,user_id,body,created_at,profiles:user_id(username,display_name,avatar_url))').order('created_at',{ascending:false}).limit(50),
+  sb.from('activity_posts').select('*,profiles:user_id(id,username,display_name,avatar_url),activity_kudos(user_id,profiles:user_id(id,username,display_name,avatar_url)),activity_comments(id,user_id,body,created_at,profiles:user_id(username,display_name,avatar_url))').order('created_at',{ascending:false}).limit(50),
   sb.from('recipe_shares').select('id,created_at,shared_by,shared_with,social_recipes(*),profiles:profiles!recipe_shares_shared_by_fkey(username,display_name,avatar_url)').eq('shared_with',userId).order('created_at',{ascending:false})
  ]);
  if(authUser?.id!==userId||activeDataUserId!==userId)return;
@@ -2364,7 +2400,7 @@ async function loadSocialState(){
  const byId=Object.fromEntries(profiles.map(p=>[p.id,p]));
  socialCache.friends=relationships.filter(r=>r.status==='accepted').map(r=>{const id=r.requester_id===userId?r.addressee_id:r.requester_id;return {...(byId[id]||{id}),friendship_id:r.id}});
  socialCache.requests=relationships.filter(r=>r.status==='pending'&&r.addressee_id===userId).map(r=>({...r,profile:byId[r.requester_id]}));
- socialCache.feed=posts||[];socialCache.sharedRecipes=shares||[];
+ socialCache.feed=posts||[];socialCache.sharedRecipes=shares||[];await loadSocialNotifications(userId);
 }
 function hasLegacyLocalData(){try{const raw=localStorage.getItem(LEGACY_LOCAL_KEY);if(!raw)return false;const x=JSON.parse(raw);return !!((x.sessions?.length)||(x.customWorkouts?.length)||(x.nutrition?.length)||(x.customRecipes?.length)||(x.measurements?.length))}catch{return false}}
 function importLegacyLocalData(){
@@ -2383,39 +2419,72 @@ async function runPeopleSearch(q){
  const {data:people,error}=await sb.from('profiles').select('id,username,display_name,avatar_url,bio').or(`username.ilike.%${q.replace(/[%(),]/g,'')}%,display_name.ilike.%${q.replace(/[%(),]/g,'')}%`).neq('id',authUser.id).limit(20);
  if(error){box.innerHTML='<div class="empty"><strong>Search failed</strong>Try again.</div>';return}
  box.innerHTML=(people||[]).length?(people||[]).map(p=>`<article class="social-person">${avatarMarkup(p,'md')}<button class="social-person-main" data-open-user="${p.id}"><strong>${escapeHtml(p.display_name||p.username||'GAYM user')}</strong><span>@${escapeHtml(p.username||'user')}</span></button><button class="small-btn" data-add-friend="${p.id}">ADD</button></article>`).join(''):'<div class="empty"><strong>No users found</strong>Try another spelling.</div>';
- $$('[data-add-friend]',box).forEach(b=>b.onclick=async()=>{const {error}=await sb.from('friendships').insert({requester_id:authUser.id,addressee_id:b.dataset.addFriend,status:'pending'});toast(error?(error.code==='23505'?'Request already exists.':error.message):'Friend request sent.');if(!error)b.textContent='SENT'});
+ $$('[data-add-friend]',box).forEach(b=>b.onclick=async()=>{const {error}=await sb.from('friendships').insert({requester_id:authUser.id,addressee_id:b.dataset.addFriend,status:'pending'});toast(error?(error.code==='23505'?'Request already exists.':error.message):'Friend request sent.');if(!error){b.textContent='SENT';await sendSocialNotification(b.dataset.addFriend,'friend_request','New friend request',`${cloudProfile?.display_name||cloudProfile?.username||'Someone'} wants to train together.`,{},null)}});
  $$('[data-open-user]',box).forEach(b=>b.onclick=()=>{closeSheet();openUserProfile(b.dataset.openUser)});
 }
-async function respondFriend(id,status){const {error}=await sb.rpc('respond_friend_request',{request_id:id,new_status:status});toast(error?error.message:(status==='accepted'?'Friend added.':'Request declined.'));await loadSocialState();profile()}
+async function respondFriend(id,status){
+ const req=await sb.from('friendships').select('requester_id,addressee_id').eq('id',id).maybeSingle();
+ const {error}=await sb.rpc('respond_friend_request',{request_id:id,new_status:status});
+ if(!error&&status==='accepted'&&req.data?.requester_id){await sendSocialNotification(req.data.requester_id,'friend_accept','Friend request accepted',`${cloudProfile?.display_name||cloudProfile?.username||'Your new friend'} accepted your friend request.`,{},`friend-accept:${id}`)}
+ toast(error?error.message:(status==='accepted'?'Friend added.':'Request declined.'));await loadSocialState();profile();
+}
 async function removeFriend(id){if(!confirm('Remove this friend?'))return;const {error}=await sb.from('friendships').delete().eq('id',id);toast(error?error.message:'Friend removed.');await loadSocialState();profile()}
+const MOTIVATION_PRESETS=[
+ 'Go lift something heavy and become a workplace distraction.',
+ 'Your muscles have appointments. Don’t be late.',
+ 'The homosexual agenda requires one more rep.',
+ 'Strong, hot, annoyingly consistent. Keep going.',
+ 'Your future pump is already judging your excuses.',
+ 'Clock in, gorgeous. The weights miss you.',
+ 'Train now. Be unbearable about it later.',
+ 'No disappearing act today. Go earn the pump.'
+];
+async function openMotivateSheet(userId,p){
+ if(!socialCache.friends.some(x=>x.id===userId))return toast('Add them as a friend first.');
+ openSheet(`<div class="sheet-head"><div><p class="eyebrow">Motivate</p><h2>Send ${escapeHtml(p.display_name||p.username||'your friend')} a little violence</h2></div><button class="sheet-close" data-close>×</button></div><p class="subtle">Pick one. It lands in their notification bell.</p><div class="motivation-presets">${MOTIVATION_PRESETS.map((x,i)=>`<button class="motivation-option" data-motivation="${i}">${escapeHtml(x)}</button>`).join('')}</div>`);
+ $$('[data-motivation]').forEach(b=>b.onclick=async()=>{const msg=MOTIVATION_PRESETS[+b.dataset.motivation];b.disabled=true;const {error}=await sendSocialNotification(userId,'motivation',`${cloudProfile?.display_name||cloudProfile?.username||'A friend'} sent motivation`,msg,{preset:+b.dataset.motivation});if(error){b.disabled=false;return toast(error.message||'Could not send motivation.')}closeSheet();toast('Motivation sent. Very supportive. Very gay.')});
+}
 async function openUserProfile(userId){
  shell(`${header('Profile',true)}<section class="section"><article class="card public-profile loading-card"><div class="cloud-loader"></div></article></section>`);$('[data-back]').onclick=()=>go('profile');
- const [{data:p},{data:posts},{data:count}]=await Promise.all([sb.from('profiles').select('id,username,display_name,bio,avatar_url').eq('id',userId).single(),sb.from('activity_posts').select('*,activity_kudos(user_id),activity_comments(id,user_id,body,created_at)').eq('user_id',userId).order('created_at',{ascending:false}).limit(15),sb.rpc('friend_count',{for_user:userId})]);
+ const [{data:p},{data:posts},{data:count}]=await Promise.all([sb.from('profiles').select('id,username,display_name,bio,avatar_url').eq('id',userId).single(),sb.from('activity_posts').select('*,activity_kudos(user_id,profiles:user_id(id,username,display_name,avatar_url)),activity_comments(id,user_id,body,created_at,profiles:user_id(username,display_name,avatar_url))').eq('user_id',userId).order('created_at',{ascending:false}).limit(15),sb.rpc('friend_count',{for_user:userId})]);
  if(!p)return toast('Could not load profile.');
- const relation=socialCache.friends.find(x=>x.id===userId);
- const pending=socialCache.requests.find(x=>x.requester_id===userId);
- const workouts=(posts||[]).filter(x=>x.kind==='workout').length;
- shell(`${header('Profile',true)}<section class="section"><article class="card social-profile-hero">${avatarMarkup(p,'xl')}<div class="social-profile-copy"><h1>${escapeHtml(p.display_name||p.username||'GAYM user')}</h1><p>@${escapeHtml(p.username||'user')}</p>${p.bio?`<span>${escapeHtml(p.bio)}</span>`:''}</div>${relation?`<button class="secondary compact" id="profile-friend">FRIENDS</button>`:pending?`<button class="primary compact" id="profile-accept">ACCEPT</button>`:`<button class="primary compact" id="profile-add">ADD FRIEND</button>`}</article><div class="social-stats"><div><strong>${Number(count||0)}</strong><span>Friends</span></div><div><strong>${workouts}</strong><span>Recent workouts</span></div><div><strong>${(posts||[]).reduce((n,p)=>n+(p.activity_kudos?.length||0),0)}</strong><span>Kudos</span></div></div></section><section class="section"><div class="section-head"><h2>Activity</h2><span class="eyebrow">MOTIVATE</span></div><div class="social-feed">${(posts||[]).length?(posts||[]).map(x=>activityCard({...x,profiles:p})).join(''):'<div class="empty"><strong>No shared activity yet</strong>Their next workout can land here.</div>'}</div></section>`);
+ const relation=socialCache.friends.find(x=>x.id===userId);const pending=socialCache.requests.find(x=>x.requester_id===userId);const workouts=(posts||[]).filter(x=>x.kind==='workout').length;
+ const relationMarkup=relation?`<span class="friend-status-badge">FRIENDS</span>`:pending?`<span class="friend-status-badge pending">REQUEST RECEIVED</span>`:'';
+ const actionMarkup=relation?`<button class="primary compact profile-motivate-btn" id="profile-motivate">MOTIVATE</button>`:pending?`<button class="primary compact" id="profile-accept">ACCEPT</button>`:`<button class="primary compact" id="profile-add">ADD FRIEND</button>`;
+ shell(`${header('Profile',true)}<section class="section"><article class="card social-profile-hero public-friend-profile">${avatarMarkup(p,'xl')}<div class="social-profile-copy"><h1>${escapeHtml(p.display_name||p.username||'GAYM user')}</h1><p>@${escapeHtml(p.username||'user')}</p>${relationMarkup}${p.bio?`<span>${escapeHtml(p.bio)}</span>`:''}</div><div class="public-profile-actions">${actionMarkup}</div></article><div class="social-stats"><div><strong>${Number(count||0)}</strong><span>Friends</span></div><div><strong>${workouts}</strong><span>Recent workouts</span></div><div><strong>${(posts||[]).reduce((n,p)=>n+(p.activity_kudos?.length||0),0)}</strong><span>Kudos</span></div></div></section><section class="section"><div class="section-head"><h2>Activity</h2><span class="eyebrow">CHEER THEM ON</span></div><div class="social-feed">${(posts||[]).length?(posts||[]).map(x=>activityCard({...x,profiles:p})).join(''):'<div class="empty"><strong>No shared activity yet</strong>Their next workout can land here.</div>'}</div></section>`);
  $('[data-back]').onclick=()=>go('profile');bindActivityCards();
- if($('#profile-friend'))$('#profile-friend').onclick=()=>toast('You are friends.');
+ if($('#profile-motivate'))$('#profile-motivate').onclick=()=>openMotivateSheet(userId,p);
  if($('#profile-accept'))$('#profile-accept').onclick=()=>respondFriend(pending.id,'accepted');
- if($('#profile-add'))$('#profile-add').onclick=async()=>{const {error}=await sb.from('friendships').insert({requester_id:authUser.id,addressee_id:userId,status:'pending'});toast(error?error.message:'Friend request sent.');$('#profile-add').textContent='REQUEST SENT';$('#profile-add').disabled=true};
+ if($('#profile-add'))$('#profile-add').onclick=async()=>{const {error}=await sb.from('friendships').insert({requester_id:authUser.id,addressee_id:userId,status:'pending'});toast(error?error.message:'Friend request sent.');if(!error){await sendSocialNotification(userId,'friend_request','New friend request',`${cloudProfile?.display_name||cloudProfile?.username||'Someone'} wants to train together.`,{},null);$('#profile-add').textContent='REQUEST SENT';$('#profile-add').disabled=true}};
+}
+function kudosLabel(kudos=[]){
+ const names=kudos.map(k=>k.profiles?.username||k.profiles?.display_name).filter(Boolean);
+ if(!names.length)return '';
+ const shown=names.slice(0,2).map(n=>`@${escapeHtml(n)}`);
+ return `${shown.join(', ')}${names.length>2?` +${names.length-2}`:''}`;
 }
 function activityCard(post){
- const p=post.profiles||cloudProfile||{},mineKudos=(post.activity_kudos||[]).some(k=>k.user_id===authUser?.id),comments=post.activity_comments||[];
- return `<article class="card activity-card" data-post="${post.id}"><div class="activity-head">${avatarMarkup(p,'sm')}<button data-open-user="${post.user_id}" class="activity-owner"><strong>${escapeHtml(p.display_name||p.username||'You')}</strong><span>@${escapeHtml(p.username||'you')} · ${new Date(post.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span></button></div><div class="activity-body"><span class="activity-kind">${post.kind==='workout'?'WORKOUT':'UPDATE'}</span><h3>${escapeHtml(post.title)}</h3>${post.body?`<p>${escapeHtml(post.body)}</p>`:''}</div><div class="activity-actions"><button class="${mineKudos?'active':''}" data-kudos="${post.id}">♥ <span>${(post.activity_kudos||[]).length}</span> KUDOS</button><button data-comments="${post.id}">COMMENT <span>${comments.length}</span></button></div>${comments.slice(-2).map(c=>`<div class="activity-comment"><strong>@${escapeHtml(c.profiles?.username||'friend')}</strong> ${escapeHtml(c.body)}</div>`).join('')}</article>`;
+ activityPostCache.set(post.id,post);
+ const p=post.profiles||cloudProfile||{},kudos=post.activity_kudos||[],mineKudos=kudos.some(k=>k.user_id===authUser?.id),comments=post.activity_comments||[],who=kudosLabel(kudos);
+ return `<article class="card activity-card" data-post="${post.id}"><div class="activity-head">${avatarMarkup(p,'sm')}<button data-open-user="${post.user_id}" class="activity-owner"><strong>${escapeHtml(p.display_name||p.username||'You')}</strong><span>@${escapeHtml(p.username||'you')} · ${new Date(post.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'})}</span></button></div><div class="activity-body"><span class="activity-kind">${post.kind==='workout'?'WORKOUT':'UPDATE'}</span><h3>${escapeHtml(post.title)}</h3>${post.body?`<p>${escapeHtml(post.body)}</p>`:''}</div><div class="activity-actions"><button class="${mineKudos?'active':''}" data-kudos="${post.id}">♥ <span>${kudos.length}</span> KUDOS</button><button data-comments="${post.id}">COMMENT <span>${comments.length}</span></button></div>${kudos.length?`<button class="kudos-people" data-kudos-list="${post.id}"><span>♥</span><span>Kudos from <strong>${who||`${kudos.length} ${kudos.length===1?'person':'people'}`}</strong></span><span class="chev">›</span></button>`:''}${comments.slice(-2).map(c=>`<div class="activity-comment"><strong>@${escapeHtml(c.profiles?.username||'friend')}</strong> ${escapeHtml(c.body)}</div>`).join('')}</article>`;
 }
 function bindActivityCards(){
  $$('[data-open-user]').forEach(b=>b.onclick=e=>{e.stopPropagation();if(b.dataset.openUser!==authUser.id)openUserProfile(b.dataset.openUser)});
  $$('[data-kudos]').forEach(b=>b.onclick=()=>toggleKudos(b.dataset.kudos));
+ $$('[data-kudos-list]').forEach(b=>b.onclick=()=>openKudosSheet(b.dataset.kudosList));
  $$('[data-comments]').forEach(b=>b.onclick=()=>openCommentSheet(b.dataset.comments));
 }
+function openKudosSheet(postId){
+ const post=activityPostCache.get(postId)||socialCache.feed.find(p=>p.id===postId),kudos=post?.activity_kudos||[];
+ openSheet(`<div class="sheet-head"><div><p class="eyebrow">Kudos</p><h2>${kudos.length} ${kudos.length===1?'person':'people'} cheered this on</h2></div><button class="sheet-close" data-close>×</button></div><div class="social-list kudos-list">${kudos.length?kudos.map(k=>{const p=k.profiles||{};return `<article class="social-person">${avatarMarkup(p,'md')}<button class="social-person-main" data-kudos-user="${k.user_id}"><strong>${escapeHtml(p.display_name||p.username||'GAYM user')}</strong><span>@${escapeHtml(p.username||'user')}</span></button></article>`}).join(''):'<div class="empty"><strong>No kudos yet</strong>Be the first one.</div>'}</div>`);
+ $$('[data-kudos-user]').forEach(b=>b.onclick=()=>{if(b.dataset.kudosUser===authUser?.id)return;closeSheet();openUserProfile(b.dataset.kudosUser)});
+}
 async function toggleKudos(postId){
- const post=socialCache.feed.find(p=>p.id===postId);const has=post?.activity_kudos?.some(k=>k.user_id===authUser.id);
- const q=has?sb.from('activity_kudos').delete().eq('post_id',postId).eq('user_id',authUser.id):sb.from('activity_kudos').insert({post_id:postId,user_id:authUser.id});const {error}=await q;if(error)return toast(error.message);await loadSocialState();profile();
+ const post=activityPostCache.get(postId)||socialCache.feed.find(p=>p.id===postId);const has=post?.activity_kudos?.some(k=>k.user_id===authUser.id);
+ const q=has?sb.from('activity_kudos').delete().eq('post_id',postId).eq('user_id',authUser.id):sb.from('activity_kudos').insert({post_id:postId,user_id:authUser.id});const {error}=await q;if(error)return toast(error.message);if(!has&&post?.user_id&&post.user_id!==authUser.id)await sendSocialNotification(post.user_id,'kudos','New Kudos',`${cloudProfile?.display_name||cloudProfile?.username||'A friend'} gave Kudos to your workout.`,{post_id:postId},`kudos:${postId}:${authUser.id}`);await loadSocialState();if(post?.user_id&&post.user_id!==authUser.id)await openUserProfile(post.user_id);else profile();
 }
 function openCommentSheet(postId){
- const post=socialCache.feed.find(p=>p.id===postId);openSheet(`<div class="sheet-head"><div><p class="eyebrow">Motivate</p><h2>${escapeHtml(post?.title||'Activity')}</h2></div><button class="sheet-close" data-close>×</button></div><div class="field"><label>Comment</label><textarea id="social-comment" maxlength="300" rows="4" placeholder="Strong work. Keep going."></textarea></div><div class="sheet-actions"><button class="primary" id="send-comment">POST COMMENT</button></div>`);$('#send-comment').onclick=async()=>{const body=$('#social-comment').value.trim();if(!body)return;const {error}=await sb.from('activity_comments').insert({post_id:postId,user_id:authUser.id,body});if(error)return toast(error.message);closeSheet();await loadSocialState();profile();toast('Comment posted.')};
+ const post=activityPostCache.get(postId)||socialCache.feed.find(p=>p.id===postId);openSheet(`<div class="sheet-head"><div><p class="eyebrow">Motivate</p><h2>${escapeHtml(post?.title||'Activity')}</h2></div><button class="sheet-close" data-close>×</button></div><div class="field"><label>Comment</label><textarea id="social-comment" maxlength="300" rows="4" placeholder="Strong work. Keep going."></textarea></div><div class="sheet-actions"><button class="primary" id="send-comment">POST COMMENT</button></div>`);$('#send-comment').onclick=async()=>{const body=$('#social-comment').value.trim();if(!body)return;const {error}=await sb.from('activity_comments').insert({post_id:postId,user_id:authUser.id,body});if(error)return toast(error.message);if(post?.user_id&&post.user_id!==authUser.id)await sendSocialNotification(post.user_id,'comment','New comment',`${cloudProfile?.display_name||cloudProfile?.username||'A friend'} commented on your workout: “${body.slice(0,120)}”`,{post_id:postId});closeSheet();await loadSocialState();if(post?.user_id&&post.user_id!==authUser.id)await openUserProfile(post.user_id);else profile();toast('Comment posted.')};
 }
 async function openPrivacySettings(){
  const [{data:settings},{data:p}]=await Promise.all([sb.from('privacy_settings').select('*').eq('user_id',authUser.id).single(),sb.from('profiles').select('discoverable').eq('id',authUser.id).single()]);
@@ -2426,12 +2495,12 @@ async function openPrivacySettings(){
 }
 async function openSocialProfileEditor(){
  const p=cloudProfile||{};
- openSheet(`<div class="sheet-head"><div><p class="eyebrow">Social profile</p><h2>Make it yours</h2></div><button class="sheet-close" data-close>×</button></div><div class="avatar-editor">${avatarMarkup(p,'xl')}<label class="secondary photo-button" for="social-avatar-file">CHANGE PHOTO</label><input id="social-avatar-file" class="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp"></div><div class="field"><label>Display name</label><input id="social-name" value="${escapeHtml(p.display_name||data.profile.name||'')}"></div><div class="field"><label>Username</label><input id="social-username" autocapitalize="none" value="${escapeHtml(p.username||'')}"></div><div class="field"><label>Bio</label><textarea id="social-bio" maxlength="160" rows="3" placeholder="Training for something, or just dangerously consistent.">${escapeHtml(p.bio||'')}</textarea></div><div class="sheet-actions"><button class="primary" id="save-social-profile">SAVE PROFILE</button></div>`);
+ openSheet(`<div class="sheet-head"><div><p class="eyebrow">Social profile</p><h2>Make it yours</h2></div><button class="sheet-close" data-close>×</button></div><div class="avatar-editor">${avatarMarkup(p,'xl')}<label class="secondary photo-button" for="social-avatar-file">CHANGE PHOTO</label><input id="social-avatar-file" class="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp"></div><div class="field"><label>Display name</label><input id="social-name" value="${escapeHtml(p.display_name||data.profile.name||'')}"></div><div class="field"><label>Username</label><input id="social-username" autocapitalize="none" value="${escapeHtml(p.username||'')}"></div><div class="field"><label>Bio</label><textarea id="social-bio" maxlength="160" rows="3" placeholder="Training for something, or just dangerously consistent.">${escapeHtml(p.bio||'')}</textarea></div><div class="profile-save-status" id="profile-save-status" aria-live="polite"></div><div class="sheet-actions"><button type="button" class="primary" id="save-social-profile">SAVE PROFILE</button></div>`);
  let avatarFile=null;$('#social-avatar-file').onchange=e=>{avatarFile=e.target.files?.[0]||null;if(avatarFile){const u=URL.createObjectURL(avatarFile);const old=$('.social-avatar.xl');if(old?.tagName==='IMG')old.src=u;else if(old){const img=document.createElement('img');img.className=old.className;img.src=u;old.replaceWith(img)}}};
  $('#save-social-profile').onclick=async()=>{
   const userId=authUser?.id;if(!userId||activeDataUserId!==userId)return toast('Your account changed. Open profile again.');
   const display_name=$('#social-name').value.trim(),username=usernameClean($('#social-username').value),bio=$('#social-bio').value.trim();if(!display_name||username.length<3)return toast('Add a name and a valid username.');
-  const btn=$('#save-social-profile');if(btn){btn.disabled=true;btn.textContent='SAVING…'}
+  const btn=$('#save-social-profile'),status=$('#profile-save-status');if(status){status.className='profile-save-status working';status.textContent=avatarFile?'Uploading photo and saving profile…':'Saving profile…'}if(btn){btn.disabled=true;btn.textContent='SAVING…'}
   let avatar_url=p.avatar_url||null;
   try{
    if(avatarFile){
@@ -2453,8 +2522,8 @@ async function openSocialProfileEditor(){
    const {data:fresh,error:freshError}=await sb.from('profiles').select('id,username,display_name,bio,avatar_url,discoverable,updated_at').eq('id',userId).single();
    if(freshError)throw freshError;
    if(authUser?.id!==userId||activeDataUserId!==userId)return;
-   cloudProfile=fresh||updated;cacheCloudProfile(cloudProfile);data.profile.name=display_name;save();closeSheet();profile();toast('Profile updated.');
-  }catch(err){console.error('save social profile',err);toast(err?.message||'Could not save profile photo.');}
+   cloudProfile=fresh||updated;cacheCloudProfile(cloudProfile);data.profile.name=display_name;save();if(status){status.className='profile-save-status success';status.textContent='Saved ✓'}toast('Profile updated.');setTimeout(()=>{closeSheet();profile()},350);
+  }catch(err){console.error('save social profile',err);if(status){status.className='profile-save-status error';status.textContent=err?.message||'Could not save profile.'}toast(err?.message||'Could not save profile photo.');}
   finally{if(btn){btn.disabled=false;btn.textContent='SAVE PROFILE'}}
  };
 }
@@ -2534,6 +2603,10 @@ function closeSheet(){
  $('#sheet-root').innerHTML='';document.documentElement.classList.remove('sheet-open');document.body.classList.remove('sheet-open');document.documentElement.style.removeProperty('--visual-viewport-height');document.documentElement.style.removeProperty('--visual-viewport-top');
  requestAnimationFrame(()=>window.scrollTo({top:sheetPageScroll,left:0,behavior:'auto'}));
 }
+
+let socialNotificationPoll=null;
+function startSocialNotificationPolling(){if(socialNotificationPoll)clearInterval(socialNotificationPoll);socialNotificationPoll=setInterval(()=>{if(authUser&&activeDataUserId===authUser.id)loadSocialNotifications(authUser.id)},30000)}
+
 function render(){evaluateNotifications();stopWorkoutClock();if(!entryUnlocked)return entry();if(route==='home')home();else if(route==='plan')plan();else if(route==='workout')workout();else if(route==='active')active();else if(route==='progress')progress();else if(route==='nutrition')nutrition();else if(route==='profile')profile();else home();}
 migrateProfile();if('scrollRestoration'in history)history.scrollRestoration='manual';window.addEventListener('beforeunload',persistActiveSession);window.addEventListener('pagehide',persistActiveSession);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistActiveSession();else if(route==='active'&&data.activeSession)render()});if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=59-stable',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));render();initializeCloud();
 })();
