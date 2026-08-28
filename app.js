@@ -1,13 +1,17 @@
 (()=>{
 'use strict';
-// GAYM v56 social backend beta: Supabase Auth, profiles, friends, activity, kudos/comments and recipe sharing.
+// GAYM v59 stabilization: strict per-account state, race-safe auth, profiles, friends, activity and recipe sharing.
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 
 const SUPABASE_URL='https://dkiejeckkwzowpkxapbc.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_eJGKDkbbHEU5UVfDPVVNRQ_OUPWKaVZ';
 const sb=window.supabase?.createClient?.(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}})||null;
 let authUser=null,cloudProfile=null,cloudBooting=true,authMode='login',socialTab='activity';
+const SOCIAL_PROFILE_CACHE_PREFIX='gaymSocialProfileV2:user:';
+function cachedCloudProfile(userId){if(!userId)return null;try{const p=JSON.parse(localStorage.getItem(`${SOCIAL_PROFILE_CACHE_PREFIX}${userId}`)||'null');return p?.id===userId?p:null}catch{return null}}
+function cacheCloudProfile(p){if(p?.id)try{localStorage.setItem(`${SOCIAL_PROFILE_CACHE_PREFIX}${p.id}`,JSON.stringify(p))}catch{}}
 let socialCache={friends:[],requests:[],feed:[],sharedRecipes:[]};
+let activeDataUserId=null,authEpoch=0;
 
 const icons={home:'<svg viewBox="0 0 24 24"><path d="M3 10.8 12 3l9 7.8v9.2a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg>',plan:'<svg viewBox="0 0 24 24"><path d="M6 3v3M18 3v3M4 8h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1z"/><path d="M8 12h3M8 16h3M14 12h2M14 16h2"/></svg>',workout:'<svg viewBox="0 0 24 24"><path d="M6 8v8M18 8v8M3 10v4M21 10v4M6 12h12"/></svg>',progress:'<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',profile:'<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c.8-4 3.5-6 8-6s7.2 2 8 6"/></svg>',bell:'<svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>',plus:'<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',back:'<svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>',dots:'<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none"/></svg>'};
 const defaults={
@@ -141,8 +145,27 @@ function calcStreakWithDate(extraDate){return calcStreakFromDates(extraDate)}
 
 function uid(){return (globalThis.crypto&&typeof crypto.randomUUID==='function')?crypto.randomUUID():`gaym-${Date.now()}-${Math.random().toString(16).slice(2)}`}
 function isoToday(d=new Date()){const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');return `${y}-${m}-${day}`}
-function load(){try{return Object.assign({},defaults,JSON.parse(localStorage.getItem('gaymV2')||'{}'))}catch{return structuredClone(defaults)}}
-let data=load(), route='home', routeArgs={}, entryUnlocked=false;if(data.activeSession){const now=Date.now();if(!Number.isFinite(Number(data.activeSession.startedAt))||Number(data.activeSession.startedAt)<=0)data.activeSession.startedAt=now;data.activeSession.startedAt=Number(data.activeSession.startedAt);data.activeSession.totalPause=Math.max(0,Number(data.activeSession.totalPause)||0);if(data.activeSession.pausedAt!=null)data.activeSession.pausedAt=Number(data.activeSession.pausedAt)||null;}if(/You said BUILD MUSCLE|Eat the fucking food/i.test(data.dailySass?.text||''))data.dailySass={date:null,text:''};data.planned=(data.planned||[]).filter(x=>x&&(x.type==='rest'||x.workoutId));data.dailySass=data.dailySass&&typeof data.dailySass==='object'?data.dailySass:{date:null,text:''};data.customRecipes=Array.isArray(data.customRecipes)?data.customRecipes:[];data.recipeFavorites=Array.isArray(data.recipeFavorites)?data.recipeFavorites:[];data.notifications=Array.isArray(data.notifications)?data.notifications:[];data.bottomCheckins=Array.isArray(data.bottomCheckins)?data.bottomCheckins:[];data.notificationMeta=Object.assign({dailySassDate:null,nutritionDate:null,absenceDate:null,streakMilestone:null},data.notificationMeta||{});recomputePRHistory({notifyNew:false});syncPlannedWorkoutReferences();save();
+const LOCAL_DATA_PREFIX='gaymV2:user:';
+const LEGACY_LOCAL_KEY='gaymV2';
+function accountLocalKey(userId){return userId?`${LOCAL_DATA_PREFIX}${userId}`:null}
+function loadForUser(userId){
+ if(!userId)return structuredClone(defaults);
+ try{
+  const raw=localStorage.getItem(accountLocalKey(userId));
+  return Object.assign({},structuredClone(defaults),raw?JSON.parse(raw):{});
+ }catch{return structuredClone(defaults)}
+}
+function normalizeLocalData(){
+ if(data.activeSession){const now=Date.now();if(!Number.isFinite(Number(data.activeSession.startedAt))||Number(data.activeSession.startedAt)<=0)data.activeSession.startedAt=now;data.activeSession.startedAt=Number(data.activeSession.startedAt);data.activeSession.totalPause=Math.max(0,Number(data.activeSession.totalPause)||0);if(data.activeSession.pausedAt!=null)data.activeSession.pausedAt=Number(data.activeSession.pausedAt)||null;}
+ if(/You said BUILD MUSCLE|Eat the fucking food/i.test(data.dailySass?.text||''))data.dailySass={date:null,text:''};
+ data.planned=(data.planned||[]).filter(x=>x&&(x.type==='rest'||x.workoutId));
+ data.dailySass=data.dailySass&&typeof data.dailySass==='object'?data.dailySass:{date:null,text:''};
+ data.customRecipes=Array.isArray(data.customRecipes)?data.customRecipes:[];data.recipeFavorites=Array.isArray(data.recipeFavorites)?data.recipeFavorites:[];data.notifications=Array.isArray(data.notifications)?data.notifications:[];data.bottomCheckins=Array.isArray(data.bottomCheckins)?data.bottomCheckins:[];
+ data.notificationMeta=Object.assign({dailySassDate:null,nutritionDate:null,absenceDate:null,streakMilestone:null},data.notificationMeta||{});
+ recomputePRHistory({notifyNew:false});syncPlannedWorkoutReferences();
+}
+function switchAccountLocalData(userId){activeDataUserId=userId||null;data=loadForUser(activeDataUserId);normalizeLocalData()}
+let data=structuredClone(defaults), route='home', routeArgs={}, entryUnlocked=false;normalizeLocalData();
 function activityFactor(sex,level){const table={sedentary:1.20,low:1.375,active:1.55,very:1.725};return table[level]||1.55}
 function goalLabel(goal){return goal==='lose'?'Lose weight':goal==='maintain'?'Maintain weight':'Build muscle'}
 function calcTargets(profile){const weight=Math.max(35,+profile.weight||70),height=Math.max(130,+profile.height||175),age=Math.max(18,+profile.age||30),sex=profile.sex==='female'?'female':'male';const rmr=10*weight+6.25*height-5*age+(sex==='male'?5:-161);const maintenance=Math.round(rmr*activityFactor(sex,profile.activity));const goal=profile.goal||'maintain';let calories=maintenance;if(goal==='lose')calories=maintenance-Math.max(300,Math.min(500,Math.round(maintenance*0.15)));if(goal==='gain')calories=maintenance+Math.max(250,Math.min(400,Math.round(maintenance*0.12)));calories=Math.round(calories/10)*10;const proteinPerKg=goal==='gain'?2.0:goal==='lose'?2.0:1.8;const protein=Math.round(weight*proteinPerKg);const fatPerKg=goal==='gain'?1.0:goal==='lose'?0.8:0.9;const fat=Math.max(45,Math.round(weight*fatPerKg));const carbs=Math.max(0,Math.round((calories-protein*4-fat*9)/4));return {rmr:Math.round(rmr),maintenance,calories,protein,fat,carbs,proteinPerKg,surplus:goal==='gain'?calories-maintenance:0,deficit:goal==='lose'?maintenance-calories:0}}
@@ -163,7 +186,11 @@ function syncPlannedWorkoutReferences(){
   p.name=w.name;p.type=w.type||'strength';return true;
  });
 }
-function save(){syncPlannedWorkoutReferences();localStorage.setItem('gaymV2',JSON.stringify(data))}
+function save(){
+ if(!activeDataUserId||!authUser||authUser.id!==activeDataUserId)return false;
+ syncPlannedWorkoutReferences();
+ try{localStorage.setItem(accountLocalKey(activeDataUserId),JSON.stringify(data));return true}catch(e){console.error('save local account data',e);return false}
+}
 function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.remove('show'),2200)}
 function escapeHtml(v=''){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
 function fmtDate(d){return new Intl.DateTimeFormat('en-GB',{weekday:'long',day:'numeric',month:'long'}).format(d)}
@@ -2228,7 +2255,6 @@ async function submitAuth(){
     await new Promise(r=>setTimeout(r,250));
     await sb.from('profiles').update({username,display_name:displayName,updated_at:new Date().toISOString()}).eq('id',res.user.id);
    }
-   data.profile.name=displayName;data.profileCreated=true;save();
    if(!res.session){authMode='login';entry();return toast('Account created. Confirm your email, then log in.');}
   }else{
    const {error}=await sb.auth.signInWithPassword({email,password});if(error)throw error;
@@ -2241,51 +2267,84 @@ async function sendPasswordReset(){
  const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:location.href.split('#')[0]});
  toast(error?error.message:'Password reset email sent.');
 }
-async function hydrateCloudProfile(){
- if(!sb||!authUser)return;
- const {data:p,error}=await sb.from('profiles').select('*').eq('id',authUser.id).maybeSingle();
- if(error)return;
- cloudProfile=p||{id:authUser.id,display_name:authUser.user_metadata?.display_name||data.profile.name,username:authUser.user_metadata?.username||null,bio:null,avatar_url:null};
+async function hydrateCloudProfile(expectedUserId=authUser?.id){
+ if(!sb||!expectedUserId||authUser?.id!==expectedUserId)return;
+ const {data:p,error}=await sb.from('profiles').select('id,username,display_name,bio,avatar_url,discoverable,updated_at').eq('id',expectedUserId).maybeSingle();
+ if(authUser?.id!==expectedUserId||activeDataUserId!==expectedUserId)return;
+ const fallback=cachedCloudProfile(expectedUserId)||{id:expectedUserId,display_name:authUser.user_metadata?.display_name||data.profile.name,username:authUser.user_metadata?.username||null,bio:null,avatar_url:null};
+ if(error){console.error('hydrateCloudProfile',error);cloudProfile=fallback;return}
+ cloudProfile=p||fallback;cacheCloudProfile(cloudProfile);
  if(cloudProfile.display_name){data.profile.name=cloudProfile.display_name;data.profileCreated=true;save()}
+}
+async function enterAuthenticatedAccount(user){
+ if(!user?.id)return;
+ const token=++authEpoch,userId=user.id;
+ authUser=user;entryUnlocked=false;cloudProfile=cachedCloudProfile(userId);socialCache={friends:[],requests:[],feed:[],sharedRecipes:[]};
+ switchAccountLocalData(userId);
+ await hydrateCloudProfile(userId);
+ if(token!==authEpoch||authUser?.id!==userId||activeDataUserId!==userId)return;
+ entryUnlocked=true;
+ await syncRecentActivitiesFromLocal(userId);
+}
+function leaveAuthenticatedAccount(){
+ ++authEpoch;authUser=null;activeDataUserId=null;cloudProfile=null;data=structuredClone(defaults);normalizeLocalData();entryUnlocked=false;socialCache={friends:[],requests:[],feed:[],sharedRecipes:[]};route='home';routeArgs={};
 }
 async function initializeCloud(){
  if(!sb){cloudBooting=false;render();return}
- try{const {data:r}=await sb.auth.getSession();authUser=r.session?.user||null;if(authUser){await hydrateCloudProfile();entryUnlocked=true;await syncRecentActivitiesFromLocal()}}
- catch(e){}finally{cloudBooting=false;render()}
- sb.auth.onAuthStateChange(async(_event,session)=>{
-  authUser=session?.user||null;
-  if(authUser){await hydrateCloudProfile();entryUnlocked=true;syncRecentActivitiesFromLocal();}
-  else{cloudProfile=null;entryUnlocked=false;socialCache={friends:[],requests:[],feed:[],sharedRecipes:[]}}
-  render();
+ try{
+  const {data:r}=await sb.auth.getSession();
+  if(r.session?.user)await enterAuthenticatedAccount(r.session.user);else leaveAuthenticatedAccount();
+ }catch(e){console.error('initializeCloud',e);leaveAuthenticatedAccount()}finally{cloudBooting=false;render()}
+ sb.auth.onAuthStateChange((_event,session)=>{
+  setTimeout(async()=>{
+   try{if(session?.user)await enterAuthenticatedAccount(session.user);else leaveAuthenticatedAccount()}catch(e){console.error('auth state change',e)}
+   finally{cloudBooting=false;render()}
+  },0);
  });
 }
-async function signOutCloud(){if(sb)await sb.auth.signOut();entryUnlocked=false;route='home';render()}
+async function signOutCloud(){
+ const btn=$('#sign-out');if(btn)btn.disabled=true;
+ try{if(sb)await sb.auth.signOut()}catch(e){console.error('sign out',e)}
+ leaveAuthenticatedAccount();render();
+}
 function sessionSocialSummary(sess){
  const name=sess.name||sess.workoutName||sess.type||'Workout';
- const exCount=Array.isArray(sess.exercises)?sess.exercises.length:0;
+ const exCount=Array.isArray(sess.items)?sess.items.length:(Array.isArray(sess.exercises)?sess.exercises.length:0);
  const duration=Math.max(0,Math.round(Number(sess.durationMin||sess.duration||0)));
  return {title:`Completed ${name}`,body:[duration?`${duration} min`:null,exCount?`${exCount} exercises`:null].filter(Boolean).join(' · ')||'Workout completed'};
 }
-async function syncRecentActivitiesFromLocal(){
- if(!sb||!authUser)return;
- const privacy=await sb.from('privacy_settings').select('workouts_visibility').eq('user_id',authUser.id).maybeSingle();
+async function syncRecentActivitiesFromLocal(expectedUserId=activeDataUserId){
+ if(!sb||!authUser||!expectedUserId||authUser.id!==expectedUserId||activeDataUserId!==expectedUserId)return;
+ const sessionsSnapshot=structuredClone(data.sessions||[]);
+ const privacy=await sb.from('privacy_settings').select('workouts_visibility').eq('user_id',expectedUserId).maybeSingle();
+ if(authUser?.id!==expectedUserId||activeDataUserId!==expectedUserId)return;
+
  const vis=privacy.data?.workouts_visibility||'friends';
- const rows=(data.sessions||[]).slice(-60).filter(Boolean).map(sess=>{const x=sessionSocialSummary(sess);return {user_id:authUser.id,kind:'workout',source_id:String(sess.id||`${sess.date}-${sess.name||sess.type||'workout'}`),title:x.title,body:x.body,metadata:{date:sess.date||null,type:sess.type||'strength'},visibility:vis,created_at:sess.finishedAt?new Date(sess.finishedAt).toISOString():(sess.date?`${sess.date}T12:00:00Z`:new Date().toISOString()),updated_at:new Date().toISOString()}});
+ const rows=sessionsSnapshot.slice(-60).filter(Boolean).map(sess=>{const x=sessionSocialSummary(sess);return {user_id:expectedUserId,kind:'workout',source_id:String(sess.id||`${sess.date}-${sess.name||sess.type||'workout'}`),title:x.title,body:x.body,metadata:{date:sess.date||null,type:sess.type||'strength'},visibility:vis,created_at:sess.finishedAt?new Date(sess.finishedAt).toISOString():(sess.date?`${sess.date}T12:00:00Z`:new Date().toISOString()),updated_at:new Date().toISOString()}});
  if(rows.length)await sb.from('activity_posts').upsert(rows,{onConflict:'user_id,kind,source_id',ignoreDuplicates:false});
 }
 async function loadSocialState(){
- if(!sb||!authUser)return;
+ if(!sb||!authUser||!activeDataUserId||authUser.id!==activeDataUserId)return;
+ const userId=authUser.id;
  const [{data:rels},{data:posts},{data:shares}]=await Promise.all([
-  sb.from('friendships').select('*').or(`requester_id.eq.${authUser.id},addressee_id.eq.${authUser.id}`),
+  sb.from('friendships').select('*').or(`requester_id.eq.${userId},addressee_id.eq.${userId}`),
   sb.from('activity_posts').select('*,profiles:user_id(id,username,display_name,avatar_url),activity_kudos(user_id),activity_comments(id,user_id,body,created_at,profiles:user_id(username,display_name,avatar_url))').order('created_at',{ascending:false}).limit(50),
-  sb.from('recipe_shares').select('id,created_at,shared_by,shared_with,social_recipes(*),profiles:profiles!recipe_shares_shared_by_fkey(username,display_name,avatar_url)').eq('shared_with',authUser.id).order('created_at',{ascending:false})
+  sb.from('recipe_shares').select('id,created_at,shared_by,shared_with,social_recipes(*),profiles:profiles!recipe_shares_shared_by_fkey(username,display_name,avatar_url)').eq('shared_with',userId).order('created_at',{ascending:false})
  ]);
- const relationships=rels||[],ids=[...new Set(relationships.flatMap(r=>[r.requester_id,r.addressee_id]).filter(id=>id!==authUser.id))];
+ if(authUser?.id!==userId||activeDataUserId!==userId)return;
+ const relationships=rels||[],ids=[...new Set(relationships.flatMap(r=>[r.requester_id,r.addressee_id]).filter(id=>id!==userId))];
  let profiles=[];if(ids.length){const r=await sb.from('profiles').select('id,username,display_name,avatar_url,bio').in('id',ids);profiles=r.data||[]}
+ if(authUser?.id!==userId||activeDataUserId!==userId)return;
  const byId=Object.fromEntries(profiles.map(p=>[p.id,p]));
- socialCache.friends=relationships.filter(r=>r.status==='accepted').map(r=>{const id=r.requester_id===authUser.id?r.addressee_id:r.requester_id;return {...(byId[id]||{id}),friendship_id:r.id}});
- socialCache.requests=relationships.filter(r=>r.status==='pending'&&r.addressee_id===authUser.id).map(r=>({...r,profile:byId[r.requester_id]}));
+ socialCache.friends=relationships.filter(r=>r.status==='accepted').map(r=>{const id=r.requester_id===userId?r.addressee_id:r.requester_id;return {...(byId[id]||{id}),friendship_id:r.id}});
+ socialCache.requests=relationships.filter(r=>r.status==='pending'&&r.addressee_id===userId).map(r=>({...r,profile:byId[r.requester_id]}));
  socialCache.feed=posts||[];socialCache.sharedRecipes=shares||[];
+}
+function hasLegacyLocalData(){try{const raw=localStorage.getItem(LEGACY_LOCAL_KEY);if(!raw)return false;const x=JSON.parse(raw);return !!((x.sessions?.length)||(x.customWorkouts?.length)||(x.nutrition?.length)||(x.customRecipes?.length)||(x.measurements?.length))}catch{return false}}
+function importLegacyLocalData(){
+ if(!authUser||!hasLegacyLocalData())return toast('No pre-account data found.');
+ if(!confirm('Import the old pre-account GAYM data into THIS account? This will replace this account\'s current local workout data.'))return;
+ try{const legacy=JSON.parse(localStorage.getItem(LEGACY_LOCAL_KEY)||'{}');data=Object.assign({},structuredClone(defaults),legacy);normalizeLocalData();save();syncRecentActivitiesFromLocal();profile();toast('Old GAYM data imported to this account.');}catch(e){toast('Could not import old local data.');}
 }
 async function openFriendsHub(){socialTab='friends';profile()}
 async function searchPeople(){
@@ -2343,18 +2402,19 @@ async function openSocialProfileEditor(){
  const p=cloudProfile||{};
  openSheet(`<div class="sheet-head"><div><p class="eyebrow">Social profile</p><h2>Make it yours</h2></div><button class="sheet-close" data-close>×</button></div><div class="avatar-editor">${avatarMarkup(p,'xl')}<label class="secondary photo-button" for="social-avatar-file">CHANGE PHOTO</label><input id="social-avatar-file" class="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp"></div><div class="field"><label>Display name</label><input id="social-name" value="${escapeHtml(p.display_name||data.profile.name||'')}"></div><div class="field"><label>Username</label><input id="social-username" autocapitalize="none" value="${escapeHtml(p.username||'')}"></div><div class="field"><label>Bio</label><textarea id="social-bio" maxlength="160" rows="3" placeholder="Training for something, or just dangerously consistent.">${escapeHtml(p.bio||'')}</textarea></div><div class="sheet-actions"><button class="primary" id="save-social-profile">SAVE PROFILE</button></div>`);
  let avatarFile=null;$('#social-avatar-file').onchange=e=>{avatarFile=e.target.files?.[0]||null;if(avatarFile){const u=URL.createObjectURL(avatarFile);const old=$('.social-avatar.xl');if(old?.tagName==='IMG')old.src=u;else if(old){const img=document.createElement('img');img.className=old.className;img.src=u;old.replaceWith(img)}}};
- $('#save-social-profile').onclick=async()=>{const display_name=$('#social-name').value.trim(),username=usernameClean($('#social-username').value),bio=$('#social-bio').value.trim();if(!display_name||username.length<3)return toast('Add a name and a valid username.');let avatar_url=p.avatar_url||null;if(avatarFile){const ext=(avatarFile.type.split('/')[1]||'jpg').replace('jpeg','jpg'),path=`${authUser.id}/avatar-${Date.now()}.${ext}`;const {error}=await sb.storage.from('avatars').upload(path,avatarFile,{upsert:true,contentType:avatarFile.type});if(error)return toast(error.message);avatar_url=sb.storage.from('avatars').getPublicUrl(path).data.publicUrl;}const {error}=await sb.from('profiles').update({display_name,username,bio,avatar_url,updated_at:new Date().toISOString()}).eq('id',authUser.id);if(error)return toast(error.message);data.profile.name=display_name;save();await hydrateCloudProfile();closeSheet();profile();toast('Profile updated.')};
+ $('#save-social-profile').onclick=async()=>{const userId=authUser?.id;if(!userId||activeDataUserId!==userId)return toast('Your account changed. Open profile again.');const display_name=$('#social-name').value.trim(),username=usernameClean($('#social-username').value),bio=$('#social-bio').value.trim();if(!display_name||username.length<3)return toast('Add a name and a valid username.');let avatar_url=p.avatar_url||null;const stamp=Date.now();if(avatarFile){const ext=(avatarFile.type.split('/')[1]||'jpg').replace('jpeg','jpg'),path=`${userId}/avatar.${ext}`;const {error:uploadError}=await sb.storage.from('avatars').upload(path,avatarFile,{upsert:true,contentType:avatarFile.type,cacheControl:'3600'});if(uploadError)return toast(uploadError.message);const base=sb.storage.from('avatars').getPublicUrl(path).data.publicUrl;avatar_url=`${base}?v=${stamp}`;}const {data:updated,error}=await sb.from('profiles').update({display_name,username,bio,avatar_url,updated_at:new Date().toISOString()}).eq('id',userId).select('id,username,display_name,bio,avatar_url,discoverable,updated_at').single();if(error)return toast(error.message);if(authUser?.id!==userId||activeDataUserId!==userId)return;cloudProfile=updated;cacheCloudProfile(updated);data.profile.name=display_name;save();closeSheet();profile();toast('Profile updated.')};
 }
 async function publishRecipeToCloud(r){
+ const userId=authUser?.id;if(!userId||activeDataUserId!==userId)throw new Error('Your account changed. Try again.');
  let image_url=null;
- if(r.custom){try{const blob=await getRecipeImage(r.id);if(blob){const path=`${authUser.id}/${String(r.id).replace(/[^a-zA-Z0-9_-]/g,'_')}.webp`;const up=await sb.storage.from('recipe-images').upload(path,blob,{upsert:true,contentType:blob.type||'image/webp'});if(!up.error)image_url=sb.storage.from('recipe-images').getPublicUrl(path).data.publicUrl}}catch(e){}}
- const row={owner_id:authUser.id,local_id:String(r.id),name:r.name,cuisine:r.cuisine||null,servings:r.servings||1,cook_time:r.time||0,kcal:r.kcal||0,protein:r.protein||0,carbs:r.carbs||0,fat:r.fat||0,fiber:r.fiber||0,ingredients:r.ingredients||[],steps:r.steps||[],tags:recipeTags(r),image_url,visibility:'private',updated_at:new Date().toISOString()};
+ if(r.custom){try{const blob=await getRecipeImage(r.id);if(blob){const path=`${userId}/${String(r.id).replace(/[^a-zA-Z0-9_-]/g,'_')}.webp`;const up=await sb.storage.from('recipe-images').upload(path,blob,{upsert:true,contentType:blob.type||'image/webp'});if(!up.error)image_url=sb.storage.from('recipe-images').getPublicUrl(path).data.publicUrl}}catch(e){}}
+ const row={owner_id:userId,local_id:String(r.id),name:r.name,cuisine:r.cuisine||null,servings:r.servings||1,cook_time:r.time||0,kcal:r.kcal||0,protein:r.protein||0,carbs:r.carbs||0,fat:r.fat||0,fiber:r.fiber||0,ingredients:r.ingredients||[],steps:r.steps||[],tags:recipeTags(r),image_url,visibility:'private',updated_at:new Date().toISOString()};
  const {data:cloud,error}=await sb.from('social_recipes').upsert(row,{onConflict:'owner_id,local_id'}).select().single();if(error)throw error;return cloud;
 }
 async function shareRecipeWithFriend(r){
  await loadSocialState();if(!socialCache.friends.length)return toast('Add a friend before sharing recipes.');
  openSheet(`<div class="sheet-head"><div><p class="eyebrow">Share recipe</p><h2>${escapeHtml(r.name)}</h2></div><button class="sheet-close" data-close>×</button></div><div class="social-list">${socialCache.friends.map(f=>`<article class="social-person">${avatarMarkup(f,'md')}<div class="social-person-main"><strong>${escapeHtml(f.display_name||f.username||'Friend')}</strong><span>@${escapeHtml(f.username||'friend')}</span></div><button class="small-btn" data-share-with="${f.id}">SHARE</button></article>`).join('')}</div>`);
- $$('[data-share-with]').forEach(b=>b.onclick=async()=>{b.disabled=true;b.textContent='SHARING…';try{const cloud=await publishRecipeToCloud(r);const {error}=await sb.from('recipe_shares').upsert({recipe_id:cloud.id,shared_by:authUser.id,shared_with:b.dataset.shareWith},{onConflict:'recipe_id,shared_with'});if(error)throw error;b.textContent='SHARED';toast('Recipe shared.')}catch(e){b.disabled=false;b.textContent='SHARE';toast(e.message||'Could not share recipe.')}})
+ $$('[data-share-with]').forEach(b=>b.onclick=async()=>{b.disabled=true;b.textContent='SHARING…';try{const cloud=await publishRecipeToCloud(r);const {error}=await sb.rpc('share_recipe_with_friend',{recipe_uuid:cloud.id,friend_uuid:b.dataset.shareWith});if(error)throw error;b.textContent='SHARED';toast('Recipe shared.')}catch(e){console.error('shareRecipeWithFriend',e);b.disabled=false;b.textContent='SHARE';toast(e.message||'Could not share recipe.')}})
 }
 async function saveSharedRecipeLocally(share){
  const r=share.social_recipes;if(!r)return;const id=`shared-${r.id}`;if(data.customRecipes.some(x=>x.id===id))return toast('Recipe already saved.');if(r.image_url){try{const resp=await fetch(r.image_url);if(resp.ok)await putRecipeImage(id,await resp.blob())}catch(e){}}data.customRecipes.push({id,name:r.name,cuisine:r.cuisine||'Other',meal:'Shared',custom:true,servings:r.servings||1,time:r.cook_time||0,kcal:+r.kcal||0,protein:+r.protein||0,carbs:+r.carbs||0,fat:+r.fat||0,fiber:+r.fiber||0,tags:r.tags||[],ingredients:r.ingredients||[],steps:r.steps||[],sharedFrom:share.shared_by,cloudRecipeId:r.id,image:r.image_url||null});save();await sb.from('recipe_favorites').upsert({user_id:authUser.id,recipe_id:r.id});toast('Recipe saved to My Recipes.');
@@ -2364,8 +2424,8 @@ function sharedRecipeCard(share){const r=share.social_recipes||{},from=share.pro
 function profile(){
  const p=cloudProfile||{display_name:data.profile.name,username:'',bio:'',avatar_url:null};
  const tabBar=`<div class="social-tabs"><button data-social-tab="activity" class="${socialTab==='activity'?'active':''}">ACTIVITY</button><button data-social-tab="friends" class="${socialTab==='friends'?'active':''}">FRIENDS${socialCache.requests.length?` <b>${socialCache.requests.length}</b>`:''}</button><button data-social-tab="recipes" class="${socialTab==='recipes'?'active':''}">SHARED</button></div>`;
- shell(`${header()}<h1 class="page-title">Profile</h1><section class="section"><article class="card social-profile-hero own">${avatarMarkup(p,'xl')}<div class="social-profile-copy"><h2>${escapeHtml(p.display_name||data.profile.name)}</h2><p>${p.username?`@${escapeHtml(p.username)}`:'Choose a username'}</p>${p.bio?`<span>${escapeHtml(p.bio)}</span>`:'<span class="subtle">Add a bio so your gym people know what you are training for.</span>'}</div><button class="icon-btn social-edit-btn" id="edit-social-profile">EDIT</button></article><div class="social-stats"><div><strong>${(data.sessions||[]).length}</strong><span>Workouts</span></div><div><strong>${calcStreak()}</strong><span>Streak</span></div><div><strong id="social-friend-count">${socialCache.friends.length}</strong><span>Friends</span></div></div><div class="profile-actions"><button class="secondary" id="find-friends">FIND FRIENDS</button><button class="secondary" id="edit-body-profile">BODY & GOAL</button></div></section>${tabBar}<section class="section" id="social-tab-content"><article class="card loading-card"><div class="cloud-loader"></div><p>Loading your GAYM circle…</p></article></section><section class="section"><p class="eyebrow">Account</p><article class="card" style="padding:0 14px"><button class="settings-row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;text-align:left" id="privacy-settings"><span>Privacy & sharing</span><small>Friends ›</small></button><button class="settings-row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;text-align:left" id="notification-settings"><span>Notifications</span><small>GAYM sass ›</small></button><button class="settings-row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;text-align:left" id="export-data"><span>Export local data</span><small>JSON ›</small></button><button class="settings-row danger-text" style="width:100%;background:none;border:0;text-align:left" id="sign-out"><span>Log out</span><small>›</small></button></article></section>`);
- $('#edit-social-profile').onclick=openSocialProfileEditor;$('#find-friends').onclick=searchPeople;$('#edit-body-profile').onclick=openProfileSheet;$('#privacy-settings').onclick=openPrivacySettings;$('#notification-settings').onclick=openNotificationSettings;$('#export-data').onclick=exportData;$('#sign-out').onclick=signOutCloud;$$('[data-social-tab]').forEach(b=>b.onclick=()=>{socialTab=b.dataset.socialTab;profile()});
+ shell(`${header()}<h1 class="page-title">Profile</h1><section class="section"><article class="card social-profile-hero own">${avatarMarkup(p,'xl')}<div class="social-profile-copy"><h2>${escapeHtml(p.display_name||data.profile.name)}</h2><p>${p.username?`@${escapeHtml(p.username)}`:'Choose a username'}</p>${p.bio?`<span>${escapeHtml(p.bio)}</span>`:'<span class="subtle">Add a bio so your gym people know what you are training for.</span>'}</div><button class="icon-btn social-edit-btn" id="edit-social-profile">EDIT</button></article><div class="social-stats"><div><strong>${(data.sessions||[]).length}</strong><span>Workouts</span></div><div><strong>${calcStreak()}</strong><span>Streak</span></div><div><strong id="social-friend-count">${socialCache.friends.length}</strong><span>Friends</span></div></div><div class="profile-actions"><button class="secondary" id="find-friends">FIND FRIENDS</button><button class="secondary" id="edit-body-profile">BODY & GOAL</button></div></section>${tabBar}<section class="section" id="social-tab-content"><article class="card loading-card"><div class="cloud-loader"></div><p>Loading your GAYM circle…</p></article></section><section class="section"><p class="eyebrow">Account</p><article class="card" style="padding:0 14px"><button class="settings-row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;text-align:left" id="privacy-settings"><span>Privacy & sharing</span><small>Friends ›</small></button><button class="settings-row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;text-align:left" id="notification-settings"><span>Notifications</span><small>GAYM sass ›</small></button>${hasLegacyLocalData()?`<button class="settings-row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;text-align:left" id="import-legacy-data"><span>Import pre-account data</span><small>ONE TIME ›</small></button>`:''}<button class="settings-row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;text-align:left" id="export-data"><span>Export local data</span><small>JSON ›</small></button><button class="settings-row danger-text" style="width:100%;background:none;border:0;text-align:left" id="sign-out"><span>Log out</span><small>›</small></button></article></section>`);
+ $('#edit-social-profile').onclick=openSocialProfileEditor;$('#find-friends').onclick=searchPeople;$('#edit-body-profile').onclick=openProfileSheet;$('#privacy-settings').onclick=openPrivacySettings;$('#notification-settings').onclick=openNotificationSettings;const importLegacy=$('#import-legacy-data');if(importLegacy)importLegacy.onclick=importLegacyLocalData;$('#export-data').onclick=exportData;$('#sign-out').onclick=signOutCloud;$$('[data-social-tab]').forEach(b=>b.onclick=()=>{socialTab=b.dataset.socialTab;profile()});
  loadSocialState().then(renderSocialTab).catch(()=>renderSocialTab());
 }
 function renderSocialTab(){
@@ -2421,5 +2481,5 @@ function closeSheet(){
  requestAnimationFrame(()=>window.scrollTo({top:sheetPageScroll,left:0,behavior:'auto'}));
 }
 function render(){evaluateNotifications();stopWorkoutClock();if(!entryUnlocked)return entry();if(route==='home')home();else if(route==='plan')plan();else if(route==='workout')workout();else if(route==='active')active();else if(route==='progress')progress();else if(route==='nutrition')nutrition();else if(route==='profile')profile();else home();}
-migrateProfile();save();if('scrollRestoration'in history)history.scrollRestoration='manual';window.addEventListener('beforeunload',persistActiveSession);window.addEventListener('pagehide',persistActiveSession);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistActiveSession();else if(route==='active'&&data.activeSession)render()});if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));render();initializeCloud();
+migrateProfile();if('scrollRestoration'in history)history.scrollRestoration='manual';window.addEventListener('beforeunload',persistActiveSession);window.addEventListener('pagehide',persistActiveSession);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistActiveSession();else if(route==='active'&&data.activeSession)render()});if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=59-stable',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));render();initializeCloud();
 })();
