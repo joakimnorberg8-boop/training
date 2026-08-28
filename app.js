@@ -1,6 +1,6 @@
 (()=>{
 'use strict';
-// GAYM v59 stabilization: strict per-account state, race-safe auth, profiles, friends, activity and recipe sharing.
+// GAYM v60: focused profile-image persistence fix on top of v59 stable.
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 
 const SUPABASE_URL='https://dkiejeckkwzowpkxapbc.supabase.co';
@@ -2232,9 +2232,35 @@ function macro(name,value,target,unit,tone='pink'){
 }
 function openFoodSheet(){openSheet(`<div class="sheet-head"><div><p class="eyebrow">Nutrition</p><h2>Add food</h2></div><button class="sheet-close" data-close>×</button></div><div class="field"><label>Name</label><input id="f-name" placeholder="e.g. Breakfast"></div><div class="inline-fields"><div class="field"><label>Calories</label><input id="f-kcal" type="number"></div><div class="field"><label>Protein (g)</label><input id="f-protein" type="number"></div></div><div class="inline-fields"><div class="field"><label>Carbs (g)</label><input id="f-carbs" type="number"></div><div class="field"><label>Fat (g)</label><input id="f-fat" type="number"></div></div><div class="field"><label>Fiber (g)</label><input id="f-fiber" type="number" placeholder="Optional"></div><div class="sheet-actions"><button class="primary" id="f-save">ADD TO TODAY</button></div>`);$('#f-save').onclick=()=>{const name=$('#f-name').value.trim(),kcal=+$('#f-kcal').value;if(!name||!kcal)return toast('Add a name and calories');const fiberRaw=$('#f-fiber').value.trim();data.nutrition.push({id:uid(),date:isoToday(),name,kcal,protein:+$('#f-protein').value||0,carbs:+$('#f-carbs').value||0,fat:+$('#f-fat').value||0,fiber:fiberRaw===''?0:+fiberRaw||0,fiberProvided:fiberRaw!==''});save();closeSheet();nutrition();toast('Food added')}}
 
+function avatarDisplayUrl(p){
+ const raw=String(p?.avatar_url||'').trim();
+ if(!raw)return '';
+ // The database stores a stable public Storage URL. Cache-busting is display-only,
+ // derived from updated_at, so refreshes always request the current avatar without
+ // mutating the persisted URL.
+ const stamp=p?.updated_at?new Date(p.updated_at).getTime():0;
+ if(!stamp||!Number.isFinite(stamp))return raw;
+ return `${raw}${raw.includes('?')?'&':'?'}gaym_avatar=${stamp}`;
+}
 function avatarMarkup(p,size='lg'){
  const name=(p?.display_name||p?.name||data.profile.name||'?').trim();
- return p?.avatar_url?`<img class="social-avatar ${size}" src="${escapeHtml(p.avatar_url)}" alt="${escapeHtml(name)}">`:`<div class="social-avatar ${size} fallback">${escapeHtml((name[0]||'?').toUpperCase())}</div>`;
+ const src=avatarDisplayUrl(p);
+ return src?`<img class="social-avatar ${size}" src="${escapeHtml(src)}" alt="${escapeHtml(name)}" referrerpolicy="no-referrer">`:`<div class="social-avatar ${size} fallback">${escapeHtml((name[0]||'?').toUpperCase())}</div>`;
+}
+async function prepareAvatarImage(file){
+ if(!file)return null;
+ if(!file.type?.startsWith('image/'))throw new Error('Choose an image file.');
+ const max=1200,canvas=document.createElement('canvas');let source,w0,h0,cleanup=()=>{};
+ if('createImageBitmap' in window){
+  source=await createImageBitmap(file,{imageOrientation:'from-image'});w0=source.width;h0=source.height;cleanup=()=>source.close?.();
+ }else{
+  const url=URL.createObjectURL(file);source=await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(new Error('Could not read that image.'));img.src=url});w0=source.naturalWidth;h0=source.naturalHeight;cleanup=()=>URL.revokeObjectURL(url);
+ }
+ const scale=Math.min(1,max/Math.max(w0,h0)),w=Math.max(1,Math.round(w0*scale)),h=Math.max(1,Math.round(h0*scale));
+ canvas.width=w;canvas.height=h;const ctx=canvas.getContext('2d',{alpha:false});ctx.drawImage(source,0,0,w,h);cleanup();
+ const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',0.9));
+ if(!blob)throw new Error('Could not prepare that image.');
+ return blob;
 }
 function usernameClean(v=''){return String(v).trim().toLowerCase().replace(/[^a-z0-9._]/g,'').slice(0,30)}
 async function submitAuth(){
@@ -2402,7 +2428,35 @@ async function openSocialProfileEditor(){
  const p=cloudProfile||{};
  openSheet(`<div class="sheet-head"><div><p class="eyebrow">Social profile</p><h2>Make it yours</h2></div><button class="sheet-close" data-close>×</button></div><div class="avatar-editor">${avatarMarkup(p,'xl')}<label class="secondary photo-button" for="social-avatar-file">CHANGE PHOTO</label><input id="social-avatar-file" class="visually-hidden" type="file" accept="image/jpeg,image/png,image/webp"></div><div class="field"><label>Display name</label><input id="social-name" value="${escapeHtml(p.display_name||data.profile.name||'')}"></div><div class="field"><label>Username</label><input id="social-username" autocapitalize="none" value="${escapeHtml(p.username||'')}"></div><div class="field"><label>Bio</label><textarea id="social-bio" maxlength="160" rows="3" placeholder="Training for something, or just dangerously consistent.">${escapeHtml(p.bio||'')}</textarea></div><div class="sheet-actions"><button class="primary" id="save-social-profile">SAVE PROFILE</button></div>`);
  let avatarFile=null;$('#social-avatar-file').onchange=e=>{avatarFile=e.target.files?.[0]||null;if(avatarFile){const u=URL.createObjectURL(avatarFile);const old=$('.social-avatar.xl');if(old?.tagName==='IMG')old.src=u;else if(old){const img=document.createElement('img');img.className=old.className;img.src=u;old.replaceWith(img)}}};
- $('#save-social-profile').onclick=async()=>{const userId=authUser?.id;if(!userId||activeDataUserId!==userId)return toast('Your account changed. Open profile again.');const display_name=$('#social-name').value.trim(),username=usernameClean($('#social-username').value),bio=$('#social-bio').value.trim();if(!display_name||username.length<3)return toast('Add a name and a valid username.');let avatar_url=p.avatar_url||null;const stamp=Date.now();if(avatarFile){const ext=(avatarFile.type.split('/')[1]||'jpg').replace('jpeg','jpg'),path=`${userId}/avatar.${ext}`;const {error:uploadError}=await sb.storage.from('avatars').upload(path,avatarFile,{upsert:true,contentType:avatarFile.type,cacheControl:'3600'});if(uploadError)return toast(uploadError.message);const base=sb.storage.from('avatars').getPublicUrl(path).data.publicUrl;avatar_url=`${base}?v=${stamp}`;}const {data:updated,error}=await sb.from('profiles').update({display_name,username,bio,avatar_url,updated_at:new Date().toISOString()}).eq('id',userId).select('id,username,display_name,bio,avatar_url,discoverable,updated_at').single();if(error)return toast(error.message);if(authUser?.id!==userId||activeDataUserId!==userId)return;cloudProfile=updated;cacheCloudProfile(updated);data.profile.name=display_name;save();closeSheet();profile();toast('Profile updated.')};
+ $('#save-social-profile').onclick=async()=>{
+  const userId=authUser?.id;if(!userId||activeDataUserId!==userId)return toast('Your account changed. Open profile again.');
+  const display_name=$('#social-name').value.trim(),username=usernameClean($('#social-username').value),bio=$('#social-bio').value.trim();if(!display_name||username.length<3)return toast('Add a name and a valid username.');
+  const btn=$('#save-social-profile');if(btn){btn.disabled=true;btn.textContent='SAVING…'}
+  let avatar_url=p.avatar_url||null;
+  try{
+   if(avatarFile){
+    const blob=await prepareAvatarImage(avatarFile);
+    if(authUser?.id!==userId||activeDataUserId!==userId)throw new Error('Your account changed. Open profile again.');
+    // Never overwrite the same Storage object. A unique immutable filename avoids
+    // stale CDN/browser cache after refresh and account switching.
+    const path=`${userId}/avatar-${Date.now()}-${Math.random().toString(36).slice(2,8)}.jpg`;
+    const {error:uploadError}=await sb.storage.from('avatars').upload(path,blob,{upsert:false,contentType:'image/jpeg',cacheControl:'31536000'});
+    if(uploadError)throw uploadError;
+    avatar_url=sb.storage.from('avatars').getPublicUrl(path).data.publicUrl;
+    if(!avatar_url)throw new Error('Could not create the profile image URL.');
+   }
+   const updated_at=new Date().toISOString();
+   const {data:updated,error}=await sb.from('profiles').update({display_name,username,bio,avatar_url,updated_at}).eq('id',userId).select('id,username,display_name,bio,avatar_url,discoverable,updated_at').single();
+   if(error)throw error;
+   if(authUser?.id!==userId||activeDataUserId!==userId)return;
+   // Read the row back once more. Supabase is the source of truth for the avatar.
+   const {data:fresh,error:freshError}=await sb.from('profiles').select('id,username,display_name,bio,avatar_url,discoverable,updated_at').eq('id',userId).single();
+   if(freshError)throw freshError;
+   if(authUser?.id!==userId||activeDataUserId!==userId)return;
+   cloudProfile=fresh||updated;cacheCloudProfile(cloudProfile);data.profile.name=display_name;save();closeSheet();profile();toast('Profile updated.');
+  }catch(err){console.error('save social profile',err);toast(err?.message||'Could not save profile photo.');}
+  finally{if(btn){btn.disabled=false;btn.textContent='SAVE PROFILE'}}
+ };
 }
 async function publishRecipeToCloud(r){
  const userId=authUser?.id;if(!userId||activeDataUserId!==userId)throw new Error('Your account changed. Try again.');
