@@ -170,6 +170,7 @@ function normalizeLocalData(){
 }
 function switchAccountLocalData(userId){activeDataUserId=userId||null;data=loadForUser(activeDataUserId);normalizeLocalData()}
 function accountDataUpdatedAt(payload=data){return Math.max(0,Number(payload?.updatedAt)||0)}
+function hasAccountContent(payload=data){return ['customWorkouts','customPrograms','sessions','measurements','nutrition','recipeFavorites','customRecipes','planned','bottomCheckins'].some(key=>Array.isArray(payload?.[key])&&payload[key].length)}
 function persistLocalAccountData(){try{localStorage.setItem(accountLocalKey(activeDataUserId),JSON.stringify(data));return true}catch(e){console.error('save local account data',e);return false}}
 function scheduleCloudAccountSync(){
  if(!cloudDataHydrated||!sb||!authUser?.id||authUser.id!==activeDataUserId)return;
@@ -185,12 +186,12 @@ async function hydrateCloudAccountData(expectedUserId=activeDataUserId){
  const {data:remote,error}=await sb.from('account_data').select('payload,updated_at').eq('user_id',expectedUserId).maybeSingle();
  if(authUser?.id!==expectedUserId||activeDataUserId!==expectedUserId)return;
  if(error){console.error('load account data',error);return}
- const remoteUpdatedAt=Math.max(accountDataUpdatedAt(remote?.payload),new Date(remote?.updated_at||0).getTime()||0);
- if(remote?.payload&&remoteUpdatedAt>accountDataUpdatedAt()){
+ const remoteUpdatedAt=Math.max(accountDataUpdatedAt(remote?.payload),new Date(remote?.updated_at||0).getTime()||0),localHasContent=hasAccountContent(),remoteHasContent=hasAccountContent(remote?.payload),useRemote=remoteHasContent&&(!localHasContent||remoteUpdatedAt>accountDataUpdatedAt());
+ if(remote?.payload&&useRemote){
   data=Object.assign({},structuredClone(defaults),remote.payload,{updatedAt:remoteUpdatedAt});normalizeLocalData();persistLocalAccountData();
  }
  cloudDataHydrated=true;
- if(!remote?.payload||accountDataUpdatedAt()>remoteUpdatedAt)save();
+ if(!remote?.payload||!useRemote||accountDataUpdatedAt()>remoteUpdatedAt)save();
 }
 let data=structuredClone(defaults), route='home', routeArgs={}, entryUnlocked=false;normalizeLocalData();
 function activityFactor(sex,level){const table={sedentary:1.20,low:1.375,active:1.55,very:1.725};return table[level]||1.55}
@@ -2893,5 +2894,5 @@ let socialNotificationPoll=null;
 function startSocialNotificationPolling(){if(socialNotificationPoll)clearInterval(socialNotificationPoll);socialNotificationPoll=setInterval(()=>{if(authUser&&activeDataUserId===authUser.id)loadSocialNotifications(authUser.id)},30000)}
 
 function render(){evaluateNotifications();stopWorkoutClock();if(!entryUnlocked)return entry();if(route==='home')home();else if(route==='plan')plan();else if(route==='workout')workout();else if(route==='active')active();else if(route==='progress')progress();else if(route==='nutrition')nutrition();else if(route==='social')social();else if(route==='chat')chatPage();else if(route==='profile')profile();else home();}
-migrateProfile();if('scrollRestoration'in history)history.scrollRestoration='manual';window.addEventListener('beforeunload',persistActiveSession);window.addEventListener('pagehide',persistActiveSession);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistActiveSession();else if(route==='active'&&data.activeSession)render()});if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=89-account-sync',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));render();initializeCloud();
+migrateProfile();if('scrollRestoration'in history)history.scrollRestoration='manual';window.addEventListener('beforeunload',persistActiveSession);window.addEventListener('pagehide',persistActiveSession);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistActiveSession();else if(route==='active'&&data.activeSession)render()});if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=90-account-sync-protection',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));render();initializeCloud();
 })();
