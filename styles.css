@@ -724,5 +724,17 @@ body{background:
 .hero-art-full.party-active .hero-mascot-full{animation:gaymParty 2.4s ease-in-out infinite}
 @media(max-width:390px){.hero-card{min-height:500px;padding:16px}.hero-art.hero-art-full{inset:0;height:100%}.hero-mascot.hero-mascot-full{object-position:59% 33%}.unicorn-speech.unicorn-speech-overlay{left:14px;top:16px;width:61%;padding:11px 12px;font-size:10px}.hero-art-full .mascot-state-label{left:14px;top:104px;max-width:61%;font-size:7px}.hero-content{padding-top:286px}.night-out-home-btn{top:198px}}
 
+/* v88: keep unicorn copy completely above the image fade. */
+.hero-card{min-height:550px}
+.hero-art.hero-art-full{z-index:auto}
+.hero-mascot.hero-mascot-full{z-index:0}
+.hero-image-shade{z-index:1}
+.unicorn-copy-panel{position:absolute;z-index:3;left:18px;top:50px;width:min(60%,285px);display:flex;align-items:flex-start;flex-direction:column;gap:10px}
+.unicorn-copy-panel .unicorn-speech.unicorn-speech-overlay{position:static;width:100%;min-height:0;padding:14px 15px;color:#fff;opacity:1;background:#0b060c;border:1px solid rgba(255,63,159,.78);box-shadow:0 10px 28px rgba(0,0,0,.58),0 0 18px rgba(255,47,159,.15);backdrop-filter:none;filter:none;text-shadow:none;font-size:12px;line-height:1.42}
+.unicorn-copy-panel .mascot-state-label{position:static;display:inline-flex;width:auto;max-width:100%;color:#ff9ad3;background:#0b060c;border-color:rgba(255,63,159,.42);backdrop-filter:none;opacity:1}
+.night-out-home-btn{top:245px}
+.hero-content{padding-top:335px}
+@media(max-width:390px){.hero-card{min-height:535px}.unicorn-copy-panel{left:14px;top:42px;width:63%;gap:8px}.unicorn-copy-panel .unicorn-speech.unicorn-speech-overlay{position:static;width:100%;padding:12px 13px;font-size:11px;line-height:1.4}.unicorn-copy-panel .mascot-state-label{position:static;max-width:100%;font-size:7px}.night-out-home-btn{top:232px}.hero-content{padding-top:322px}}
+
 /* v84 local font + mascot refinement */
 .attitude,.script-title,.pb-neon-kicker,.pb-lift-name{font-family:"Bangers","Segoe Print",cursive!important;letter-spacing:.035em}
