@@ -14,14 +14,15 @@ function cacheCloudProfile(p){if(p?.id)try{localStorage.setItem(`${SOCIAL_PROFIL
 let socialCache={friends:[],requests:[],feed:[],nightOuts:[],sharedRecipes:[],notifications:[]};
 let socialCacheUpdatedAt=0,socialLoadPromise=null;
 const SOCIAL_CACHE_TTL=15000;
-let activeDataUserId=null,authEpoch=0;
+let activeDataUserId=null,authEpoch=0,cloudDataHydrated=false,cloudSyncTimer=null;
 
-const icons={home:'<svg viewBox="0 0 24 24"><path d="M3 10.8 12 3l9 7.8v9.2a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg>',plan:'<svg viewBox="0 0 24 24"><path d="M6 3v3M18 3v3M4 8h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1z"/><path d="M8 12h3M8 16h3M14 12h2M14 16h2"/></svg>',social:'<svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M2.8 20c.5-3.7 2.5-5.5 5.2-5.5s4.7 1.8 5.2 5.5M13.5 15.2c1-.7 2.1-1 3.5-1 2.4 0 4 1.5 4.5 4.8"/></svg>',workout:'<svg viewBox="0 0 24 24"><path d="M6 8v8M18 8v8M3 10v4M21 10v4M6 12h12"/></svg>',progress:'<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',profile:'<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c.8-4 3.5-6 8-6s7.2 2 8 6"/></svg>',bell:'<svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>',plus:'<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',back:'<svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>',dots:'<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none"/></svg>'};
+const icons={home:'<svg viewBox="0 0 24 24"><path d="M3 10.8 12 3l9 7.8v9.2a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg>',plan:'<svg viewBox="0 0 24 24"><path d="M6 3v3M18 3v3M4 8h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1z"/><path d="M8 12h3M8 16h3M14 12h2M14 16h2"/></svg>',social:'<svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M2.8 20c.5-3.7 2.5-5.5 5.2-5.5s4.7 1.8 5.2 5.5M13.5 15.2c1-.7 2.1-1 3.5-1 2.4 0 4 1.5 4.5 4.8"/></svg>',workout:'<svg viewBox="0 0 24 24"><path d="M6 8v8M18 8v8M3 10v4M21 10v4M6 12h12"/></svg>',progress:'<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',profile:'<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c.8-4 3.5-6 8-6s7.2 2 8 6"/></svg>',bell:'<svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>',plus:'<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',back:'<svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>',menu:'<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>',dots:'<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none"/></svg>'};
 const defaults={
  profile:{name:'Jocke',weight:70.4,height:183,age:28,sex:'male',activity:'active',goal:'gain',calorieTarget:2910,proteinTarget:140,carbTarget:300,fatTarget:80,autoTargets:true},
  customWorkouts:[],customPrograms:[],sessions:[],measurements:[],nutrition:[],recipeFavorites:[],customRecipes:[],
  planned:[], activeSession:null, profileCreated:false, sassSeed:null, dailySass:{date:null,text:''},
  notificationSettings:{workout:true,nutrition:true,progress:true,dailySass:true,unhinged:true,dailyTime:'09:00',nutritionTime:'19:00'},
+ updatedAt:0,
  notifications:[], notificationMeta:{dailySassDate:null,nutritionDate:null,absenceDate:null,streakMilestone:null}, unicornEvent:null, coachCheckins:[], bottomCheckins:[], nightOut:null, prideMode:'auto', selectedTitle:'', achievementMeta:{}, beginnerEquipment:['dumbbells','barbell','mat']
 };
 
@@ -168,6 +169,29 @@ function normalizeLocalData(){
  recomputePRHistory({notifyNew:false});syncPlannedWorkoutReferences();
 }
 function switchAccountLocalData(userId){activeDataUserId=userId||null;data=loadForUser(activeDataUserId);normalizeLocalData()}
+function accountDataUpdatedAt(payload=data){return Math.max(0,Number(payload?.updatedAt)||0)}
+function persistLocalAccountData(){try{localStorage.setItem(accountLocalKey(activeDataUserId),JSON.stringify(data));return true}catch(e){console.error('save local account data',e);return false}}
+function scheduleCloudAccountSync(){
+ if(!cloudDataHydrated||!sb||!authUser?.id||authUser.id!==activeDataUserId)return;
+ clearTimeout(cloudSyncTimer);cloudSyncTimer=setTimeout(()=>syncCloudAccountData(activeDataUserId),500);
+}
+async function syncCloudAccountData(expectedUserId=activeDataUserId){
+ if(!sb||!expectedUserId||authUser?.id!==expectedUserId||activeDataUserId!==expectedUserId)return;
+ const {error}=await sb.from('account_data').upsert({user_id:expectedUserId,payload:data,updated_at:new Date(accountDataUpdatedAt()).toISOString()},{onConflict:'user_id'});
+ if(error)console.error('sync account data',error);
+}
+async function hydrateCloudAccountData(expectedUserId=activeDataUserId){
+ if(!sb||!expectedUserId||authUser?.id!==expectedUserId||activeDataUserId!==expectedUserId)return;
+ const {data:remote,error}=await sb.from('account_data').select('payload,updated_at').eq('user_id',expectedUserId).maybeSingle();
+ if(authUser?.id!==expectedUserId||activeDataUserId!==expectedUserId)return;
+ if(error){console.error('load account data',error);return}
+ const remoteUpdatedAt=Math.max(accountDataUpdatedAt(remote?.payload),new Date(remote?.updated_at||0).getTime()||0);
+ if(remote?.payload&&remoteUpdatedAt>accountDataUpdatedAt()){
+  data=Object.assign({},structuredClone(defaults),remote.payload,{updatedAt:remoteUpdatedAt});normalizeLocalData();persistLocalAccountData();
+ }
+ cloudDataHydrated=true;
+ if(!remote?.payload||accountDataUpdatedAt()>remoteUpdatedAt)save();
+}
 let data=structuredClone(defaults), route='home', routeArgs={}, entryUnlocked=false;normalizeLocalData();
 function activityFactor(sex,level){const table={sedentary:1.20,low:1.375,active:1.55,very:1.725};return table[level]||1.55}
 function goalLabel(goal){return goal==='lose'?'Lose weight':goal==='maintain'?'Maintain weight':'Build muscle'}
@@ -192,7 +216,7 @@ function syncPlannedWorkoutReferences(){
 function save(){
  if(!activeDataUserId||!authUser||authUser.id!==activeDataUserId)return false;
  syncPlannedWorkoutReferences();
- try{localStorage.setItem(accountLocalKey(activeDataUserId),JSON.stringify(data));return true}catch(e){console.error('save local account data',e);return false}
+ data.updatedAt=Date.now();const saved=persistLocalAccountData();if(saved)scheduleCloudAccountSync();return saved
 }
 function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.remove('show'),2200)}
 function escapeHtml(v=''){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
@@ -216,10 +240,14 @@ function entry(){
 }
 function nav(){return `<nav class="bottom-nav">${[['home','Home'],['social','Social'],['workout','Workout'],['progress','Progress'],['profile','Profile']].map(([r,l])=>`<button class="nav-item ${route===r?'active':''} ${r==='workout'?'center':''}" data-route="${r}">${r==='workout'?`<span class="nav-bubble">${icons.workout}</span>`:icons[r]}<span>${l}</span></button>`).join('')}</nav>`}
 function shell(content){$('#app').innerHTML=`<main class="screen">${content}</main>${nav()}`; bindGlobal()}
-function bindGlobal(){$$('[data-route]').forEach(b=>b.onclick=()=>go(b.dataset.route));$$('[data-action="notify"]').forEach(b=>b.onclick=openNotifications);$$('[data-session-id]').forEach(b=>b.onclick=()=>openSessionDetail(b.dataset.sessionId));}
+function bindGlobal(){$$('[data-route]').forEach(b=>b.onclick=()=>go(b.dataset.route));$$('[data-action="notify"]').forEach(b=>b.onclick=openNotifications);$$('[data-action="quick-menu"]').forEach(b=>b.onclick=openQuickMenu);$$('[data-session-id]').forEach(b=>b.onclick=()=>openSessionDetail(b.dataset.sessionId));}
 function go(r,args={}){route=r;routeArgs=args;render();requestAnimationFrame(()=>window.scrollTo({top:0,left:0,behavior:'auto'}))}
 function socialUnreadCount(){return (socialCache.notifications||[]).filter(n=>!n.read_at).length}
-function header(title='',back=false){const unread=socialUnreadCount();return `<header class="topbar">${back?`<button class="icon-btn" data-back>${icons.back}</button>`:`<div class="brand">GAYM.</div>`}<strong>${escapeHtml(title)}</strong>${back?`<span style="width:42px"></span>`:`<button class="icon-btn notification-bell" data-action="notify">${icons.bell}${unread?`<b class="notification-badge">${Math.min(unread,9)}${unread>9?'+':''}</b>`:''}</button>`}</header>`}
+function header(title='',back=false){const unread=socialUnreadCount();return `<header class="topbar"><div class="topbar-left"><button class="icon-btn quick-menu-trigger" data-action="quick-menu" aria-label="Open quick navigation" aria-haspopup="dialog">${icons.menu}</button>${back?`<button class="icon-btn" data-back aria-label="Go back">${icons.back}</button>`:`<div class="brand">GAYM.</div>`}</div><strong>${escapeHtml(title)}</strong>${back?`<span style="width:42px"></span>`:`<button class="icon-btn notification-bell" data-action="notify">${icons.bell}${unread?`<b class="notification-badge">${Math.min(unread,9)}${unread>9?'+':''}</b>`:''}</button>`}</header>`}
+function quickMenuGroup(icon,label,items,open=false){return `<details class="quick-menu-group" ${open?'open':''}><summary>${icon}<strong>${label}</strong><span class="quick-menu-chevron">⌄</span></summary><div class="quick-menu-links">${items.map(([key,name])=>`<button type="button" data-quick-go="${key}">${name}<span>›</span></button>`).join('')}</div></details>`}
+function openQuickMenu(){const root=$('#sheet-root');root.innerHTML=`<div class="quick-menu-backdrop"><aside class="quick-menu" role="dialog" aria-modal="true" aria-label="Quick navigation"><div class="quick-menu-head"><strong>QUICK NAVIGATION</strong><button class="sheet-close" data-quick-close aria-label="Close navigation">×</button></div>${quickMenuGroup(icons.home,'Home',[['home','Dashboard'],['plan','My plan']],true)}${quickMenuGroup(icons.workout,'Workout',[['workout','My training'],['workout-beginner','Beginner training'],['workout-history','Log or view history']])}${quickMenuGroup(icons.progress,'Progress',[['progress','Exercise progress'],['progress-history','Workout history'],['progress-body','Body measurements']])}${quickMenuGroup(icons.plan,'Nutrition',[['nutrition-today','Today'],['nutrition-recipes','Recipes'],['nutrition-community','Community recipes']])}${quickMenuGroup(icons.social,'Social',[['social-activity','Activity'],['social-messages','Messages'],['social-friends','Friends']])}${quickMenuGroup(icons.profile,'Profile',[['profile','Profile'],['profile-body','Body & goal'],['profile-notifications','Notifications']])}</aside></div>`;const backdrop=$('.quick-menu-backdrop',root);backdrop.onclick=e=>{if(e.target===backdrop)closeQuickMenu()};$$('[data-quick-close]',root).forEach(b=>b.onclick=closeQuickMenu);$$('[data-quick-go]',root).forEach(b=>b.onclick=()=>quickGo(b.dataset.quickGo));requestAnimationFrame(()=>root.querySelector('[data-quick-close]')?.focus())}
+function closeQuickMenu(){$('#sheet-root').innerHTML=''}
+function quickGo(target){closeQuickMenu();if(target==='workout-beginner'){go('workout');requestAnimationFrame(()=>$('#workout-beginner-tab')?.click());return}if(target==='workout-history'){go('plan');requestAnimationFrame(openHistorySheet);return}if(target==='progress-history'){go('progress');requestAnimationFrame(openHistorySheet);return}if(target==='progress-body'){go('progress');requestAnimationFrame(openBodySheet);return}if(target.startsWith('nutrition-')){nutritionTab=target.replace('nutrition-','');go('nutrition');return}if(target.startsWith('social-')){socialTab=target.replace('social-','');go('social');return}if(target==='profile-body'){go('profile');requestAnimationFrame(openProfileSheet);return}if(target==='profile-notifications'){go('profile');requestAnimationFrame(openNotificationSettings);return}go(target)}
 
 
 const GAY_REACTIONS=['ATE','HOT','STRONG','RUDE','MOTHER'];
@@ -2469,20 +2497,21 @@ async function hydrateCloudProfile(expectedUserId=authUser?.id){
  const fallback=cachedCloudProfile(expectedUserId)||{id:expectedUserId,display_name:authUser.user_metadata?.display_name||data.profile.name,username:authUser.user_metadata?.username||null,bio:null,avatar_url:null};
  if(error){console.error('hydrateCloudProfile',error);cloudProfile=fallback;return}
  cloudProfile=p||fallback;cacheCloudProfile(cloudProfile);
- if(cloudProfile.display_name){data.profile.name=cloudProfile.display_name;data.profileCreated=true;save()}
+ if(cloudProfile.display_name){data.profile.name=cloudProfile.display_name;data.profileCreated=true;if(cloudDataHydrated)save()}
 }
 async function enterAuthenticatedAccount(user){
  if(!user?.id)return;
  const token=++authEpoch,userId=user.id;
- authUser=user;entryUnlocked=false;cloudProfile=cachedCloudProfile(userId);socialTab='activity';activityPostCache.clear();socialCache={friends:[],requests:[],feed:[],nightOuts:[],sharedRecipes:[],notifications:[]};socialCacheUpdatedAt=0;socialLoadPromise=null;resetRecipeCloudState();
+ authUser=user;entryUnlocked=false;cloudDataHydrated=false;cloudProfile=cachedCloudProfile(userId);socialTab='activity';activityPostCache.clear();socialCache={friends:[],requests:[],feed:[],nightOuts:[],sharedRecipes:[],notifications:[]};socialCacheUpdatedAt=0;socialLoadPromise=null;resetRecipeCloudState();
  switchAccountLocalData(userId);
  await hydrateCloudProfile(userId);
+ await hydrateCloudAccountData(userId);
  if(token!==authEpoch||authUser?.id!==userId||activeDataUserId!==userId)return;
  entryUnlocked=true;
  await Promise.all([syncRecentActivitiesFromLocal(userId),loadSocialNotifications(userId)]);
 }
 function leaveAuthenticatedAccount(){
- ++authEpoch;authUser=null;activeDataUserId=null;cloudProfile=null;activityPostCache.clear();socialTab='activity';data=structuredClone(defaults);normalizeLocalData();entryUnlocked=false;socialCache={friends:[],requests:[],feed:[],nightOuts:[],sharedRecipes:[],notifications:[]};socialCacheUpdatedAt=0;socialLoadPromise=null;resetRecipeCloudState();route='home';routeArgs={};
+ ++authEpoch;clearTimeout(cloudSyncTimer);cloudDataHydrated=false;authUser=null;activeDataUserId=null;cloudProfile=null;activityPostCache.clear();socialTab='activity';data=structuredClone(defaults);normalizeLocalData();entryUnlocked=false;socialCache={friends:[],requests:[],feed:[],nightOuts:[],sharedRecipes:[],notifications:[]};socialCacheUpdatedAt=0;socialLoadPromise=null;resetRecipeCloudState();route='home';routeArgs={};
 }
 async function initializeCloud(){
  if(!sb){cloudBooting=false;render();return}
@@ -2864,5 +2893,5 @@ let socialNotificationPoll=null;
 function startSocialNotificationPolling(){if(socialNotificationPoll)clearInterval(socialNotificationPoll);socialNotificationPoll=setInterval(()=>{if(authUser&&activeDataUserId===authUser.id)loadSocialNotifications(authUser.id)},30000)}
 
 function render(){evaluateNotifications();stopWorkoutClock();if(!entryUnlocked)return entry();if(route==='home')home();else if(route==='plan')plan();else if(route==='workout')workout();else if(route==='active')active();else if(route==='progress')progress();else if(route==='nutrition')nutrition();else if(route==='social')social();else if(route==='chat')chatPage();else if(route==='profile')profile();else home();}
-migrateProfile();if('scrollRestoration'in history)history.scrollRestoration='manual';window.addEventListener('beforeunload',persistActiveSession);window.addEventListener('pagehide',persistActiveSession);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistActiveSession();else if(route==='active'&&data.activeSession)render()});if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=88-readable-unicorn-copy',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));render();initializeCloud();
+migrateProfile();if('scrollRestoration'in history)history.scrollRestoration='manual';window.addEventListener('beforeunload',persistActiveSession);window.addEventListener('pagehide',persistActiveSession);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistActiveSession();else if(route==='active'&&data.activeSession)render()});if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=89-account-sync',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));render();initializeCloud();
 })();
