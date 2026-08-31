@@ -1,6 +1,6 @@
 (()=>{
 'use strict';
-// GAYM v77 Community Recipes: persistent cloud recipes + visibility + full preview before save.
+// GAYM v78 Recovery: auth-safe recipe sync + resilient Community loading.
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 
 const SUPABASE_URL='https://dkiejeckkwzowpkxapbc.supabase.co';
@@ -12,7 +12,7 @@ const SOCIAL_PROFILE_CACHE_PREFIX='gaymSocialProfileV2:user:';
 function cachedCloudProfile(userId){if(!userId)return null;try{const p=JSON.parse(localStorage.getItem(`${SOCIAL_PROFILE_CACHE_PREFIX}${userId}`)||'null');return p?.id===userId?p:null}catch{return null}}
 function cacheCloudProfile(p){if(p?.id)try{localStorage.setItem(`${SOCIAL_PROFILE_CACHE_PREFIX}${p.id}`,JSON.stringify(p))}catch{}}
 let socialCache={friends:[],requests:[],feed:[],nightOuts:[],notifications:[]};
-let communityRecipeState={items:[],saved:[],loading:false,loadedAt:0};
+let communityRecipeState={items:[],saved:[],loading:false,loadedAt:0,error:null};
 let socialCacheUpdatedAt=0,socialLoadPromise=null;
 const SOCIAL_CACHE_TTL=15000;
 let activeDataUserId=null,authEpoch=0;
@@ -2407,11 +2407,45 @@ async function syncOwnedRecipesFromCloud(expectedUserId=activeDataUserId){
  data.customRecipes=[...byId.values(),...preserved];save();
 }
 async function loadCommunityRecipes(force=false){
- if(!sb||!authUser)return communityRecipeState;const now=Date.now();if(!force&&communityRecipeState.loadedAt&&now-communityRecipeState.loadedAt<15000)return communityRecipeState;communityRecipeState.loading=true;
- try{const userId=authUser.id;const [recipesRes,favsRes]=await Promise.all([
-  sb.from('social_recipes').select('*,creator:profiles!social_recipes_owner_id_fkey(id,username,display_name,avatar_url)').neq('owner_id',userId).in('visibility',['friends','public']).order('created_at',{ascending:false}).limit(60),
-  sb.from('recipe_favorites').select('recipe_id,social_recipes(*,creator:profiles!social_recipes_owner_id_fkey(id,username,display_name,avatar_url))').eq('user_id',userId).order('created_at',{ascending:false}).limit(60)
- ]);if(recipesRes.error)throw recipesRes.error;if(favsRes.error)throw favsRes.error;communityRecipeState.items=(recipesRes.data||[]).map(r=>cloudRecipeToApp(r));communityRecipeState.saved=(favsRes.data||[]).map(x=>x.social_recipes).filter(Boolean).map(r=>cloudRecipeToApp(r,{saved:true}));communityRecipeState.loadedAt=Date.now();return communityRecipeState;
+ if(!sb||!authUser)return communityRecipeState;
+ const now=Date.now();
+ if(!force&&communityRecipeState.loadedAt&&now-communityRecipeState.loadedAt<15000)return communityRecipeState;
+ if(communityRecipeState.loading)return communityRecipeState;
+ communityRecipeState.loading=true;communityRecipeState.error=null;
+ try{
+  const userId=authUser.id;
+  // Deliberately avoid nested PostgREST relationship joins here. A recipe/schema-cache
+  // problem must never break authentication or the rest of GAYM.
+  const [recipesRes,favsRes]=await Promise.all([
+   sb.from('social_recipes').select('*').neq('owner_id',userId).in('visibility',['friends','public']).order('created_at',{ascending:false}).limit(60),
+   sb.from('recipe_favorites').select('recipe_id,created_at').eq('user_id',userId).order('created_at',{ascending:false}).limit(60)
+  ]);
+  if(recipesRes.error)throw recipesRes.error;
+  if(favsRes.error)throw favsRes.error;
+  const communityRows=recipesRes.data||[];
+  const favoriteIds=(favsRes.data||[]).map(x=>x.recipe_id).filter(Boolean);
+  let savedRows=[];
+  if(favoriteIds.length){
+   const savedRes=await sb.from('social_recipes').select('*').in('id',favoriteIds);
+   if(savedRes.error)throw savedRes.error;
+   savedRows=savedRes.data||[];
+  }
+  const ownerIds=[...new Set([...communityRows,...savedRows].map(r=>r.owner_id).filter(Boolean))];
+  let profileMap=new Map();
+  if(ownerIds.length){
+   const profileRes=await sb.from('profiles').select('id,username,display_name,avatar_url').in('id',ownerIds);
+   if(profileRes.error)throw profileRes.error;
+   profileMap=new Map((profileRes.data||[]).map(p=>[p.id,p]));
+  }
+  if(authUser?.id!==userId)return communityRecipeState;
+  communityRecipeState.items=communityRows.map(r=>cloudRecipeToApp({...r,creator:profileMap.get(r.owner_id)||null}));
+  communityRecipeState.saved=savedRows.map(r=>cloudRecipeToApp({...r,creator:profileMap.get(r.owner_id)||null},{saved:true}));
+  communityRecipeState.loadedAt=Date.now();communityRecipeState.error=null;
+  return communityRecipeState;
+ }catch(e){
+  console.error('loadCommunityRecipes',e);
+  communityRecipeState.error=e?.message||'Could not load community recipes.';
+  return communityRecipeState;
  }finally{communityRecipeState.loading=false}
 }
 function communityRecipeCard(r){const who=r.creator?.display_name||r.creator?.username||'GAYM user';return `<article class="recipe-card community-recipe-card" data-community-recipe="${r.cloudRecipeId}"><img src="${escapeHtml(r.image||RECIPE_FALLBACK)}" alt="${escapeHtml(r.name)}"><div class="recipe-card-body"><p class="eyebrow">${escapeHtml(visibilityLabel(r.visibility))}</p><h3>${escapeHtml(r.name)}</h3><p>${Math.round(r.kcal)} kcal · ${Math.round(r.protein)} g protein</p><small>By ${escapeHtml(who)}</small></div></article>`}
@@ -2426,8 +2460,8 @@ function nutrition(){
  const tabs=`<div class="nutrition-tabs nutrition-tabs-three"><button data-ntab="today" class="${nutritionTab==='today'?'active':''}">TODAY</button><button data-ntab="recipes" class="${nutritionTab==='recipes'?'active':''}">RECIPES</button><button data-ntab="community" class="${nutritionTab==='community'?'active':''}">COMMUNITY</button></div>`;
  if(nutritionTab==='community'){
   const q=communityRecipeQuery.trim().toLowerCase(),items=communityRecipeState.items.filter(r=>!q||`${r.name} ${r.cuisine} ${(r.tags||[]).join(' ')} ${r.creator?.display_name||''} ${r.creator?.username||''}`.toLowerCase().includes(q));
-  shell(`${header()}<h1 class="page-title">Nutrition</h1>${tabs}<section class="section"><div class="section-head"><div><p class="eyebrow">RECIPES FROM USERS</p><h2>GAYM Community</h2></div></div><p class="subtle">Open any recipe to see every ingredient and all instructions before you save it.</p><div class="recipe-search"><input id="community-recipe-search" value="${escapeHtml(communityRecipeQuery)}" placeholder="Search community recipes..."></div><div id="community-recipes">${communityRecipeState.loading?'<article class="card loading-card"><div class="cloud-loader"></div><p>Loading recipes…</p></article>':items.length?`<div class="recipe-grid">${items.map(communityRecipeCard).join('')}</div>`:'<div class="empty"><strong>No community recipes yet</strong>Recipes shared with Friends or All of GAYM will appear here.</div>'}</div></section>`);
-  bindNutritionTabs();$('#community-recipe-search').oninput=e=>{communityRecipeQuery=e.target.value;nutrition()};$$('[data-community-recipe]').forEach(x=>x.onclick=()=>openCommunityRecipe(x.dataset.communityRecipe));if(!communityRecipeState.loadedAt&&!communityRecipeState.loading)loadCommunityRecipes(false).then(()=>{if(route==='nutrition'&&nutritionTab==='community')nutrition()}).catch(e=>{console.error('community recipes',e);toast('Could not load community recipes.')});return;
+  shell(`${header()}<h1 class="page-title">Nutrition</h1>${tabs}<section class="section"><div class="section-head"><div><p class="eyebrow">RECIPES FROM USERS</p><h2>GAYM Community</h2></div></div><p class="subtle">Open any recipe to see every ingredient and all instructions before you save it.</p><div class="recipe-search"><input id="community-recipe-search" value="${escapeHtml(communityRecipeQuery)}" placeholder="Search community recipes..."></div><div id="community-recipes">${communityRecipeState.loading?'<article class="card loading-card"><div class="cloud-loader"></div><p>Loading recipes…</p></article>':communityRecipeState.error?`<div class="empty recipe-load-error"><strong>Could not load Community</strong><span>${escapeHtml(communityRecipeState.error)}</span><button class="secondary" id="retry-community-recipes">TRY AGAIN</button></div>`:items.length?`<div class="recipe-grid">${items.map(communityRecipeCard).join('')}</div>`:'<div class="empty"><strong>No community recipes yet</strong>Recipes shared with Friends or All of GAYM will appear here.</div>'}</div></section>`);
+  bindNutritionTabs();$('#community-recipe-search').oninput=e=>{communityRecipeQuery=e.target.value;nutrition()};$$('[data-community-recipe]').forEach(x=>x.onclick=()=>openCommunityRecipe(x.dataset.communityRecipe));const retry=$('#retry-community-recipes');if(retry)retry.onclick=async()=>{communityRecipeState.error=null;communityRecipeState.loadedAt=0;nutrition();await loadCommunityRecipes(true);if(route==='nutrition'&&nutritionTab==='community')nutrition()};if(!communityRecipeState.loadedAt&&!communityRecipeState.loading&&!communityRecipeState.error)loadCommunityRecipes(false).then(()=>{if(route==='nutrition'&&nutritionTab==='community')nutrition()});return;
  }
  if(nutritionTab==='recipes'){
   const savedCloud=communityRecipeState.saved||[];const source=recipeLibraryView==='mine'?[...(data.customRecipes||[]),...savedCloud]:recipeLibraryView==='favorites'?allRecipes().filter(r=>(data.recipeFavorites||[]).includes(r.id)):allRecipes();
@@ -2487,15 +2521,25 @@ async function hydrateCloudProfile(expectedUserId=authUser?.id){
 async function enterAuthenticatedAccount(user){
  if(!user?.id)return;
  const token=++authEpoch,userId=user.id;
- authUser=user;entryUnlocked=false;cloudProfile=cachedCloudProfile(userId);socialTab='activity';activityPostCache.clear();socialCache={friends:[],requests:[],feed:[],nightOuts:[],notifications:[]};socialCacheUpdatedAt=0;socialLoadPromise=null;communityRecipeState={items:[],saved:[],loading:false,loadedAt:0};
+ authUser=user;entryUnlocked=false;cloudProfile=cachedCloudProfile(userId);socialTab='activity';activityPostCache.clear();socialCache={friends:[],requests:[],feed:[],nightOuts:[],notifications:[]};socialCacheUpdatedAt=0;socialLoadPromise=null;communityRecipeState={items:[],saved:[],loading:false,loadedAt:0,error:null};
  switchAccountLocalData(userId);
  await hydrateCloudProfile(userId);
  if(token!==authEpoch||authUser?.id!==userId||activeDataUserId!==userId)return;
  entryUnlocked=true;
- await Promise.all([syncRecentActivitiesFromLocal(userId),loadSocialNotifications(userId),syncOwnedRecipesFromCloud(userId),loadCommunityRecipes(true)]);
+ // Core account boot must not depend on optional features. Each background sync is
+ // isolated so a Recipes/Feed failure cannot log the user out or hide Friends/Profile.
+ Promise.allSettled([
+  syncRecentActivitiesFromLocal(userId),
+  loadSocialNotifications(userId)
+ ]).then(results=>results.forEach((r,i)=>{if(r.status==='rejected')console.error(i===0?'activity background sync':'notification background sync',r.reason)}));
+ Promise.resolve().then(async()=>{
+  try{await syncOwnedRecipesFromCloud(userId)}catch(e){console.error('recipe owner background sync',e)}
+  try{await loadCommunityRecipes(true)}catch(e){console.error('recipe community background sync',e)}
+  if(authUser?.id===userId&&activeDataUserId===userId&&route==='nutrition')render();
+ });
 }
 function leaveAuthenticatedAccount(){
- ++authEpoch;authUser=null;activeDataUserId=null;cloudProfile=null;activityPostCache.clear();socialTab='activity';data=structuredClone(defaults);normalizeLocalData();entryUnlocked=false;socialCache={friends:[],requests:[],feed:[],nightOuts:[],notifications:[]};socialCacheUpdatedAt=0;socialLoadPromise=null;communityRecipeState={items:[],saved:[],loading:false,loadedAt:0};route='home';routeArgs={};
+ ++authEpoch;authUser=null;activeDataUserId=null;cloudProfile=null;activityPostCache.clear();socialTab='activity';data=structuredClone(defaults);normalizeLocalData();entryUnlocked=false;socialCache={friends:[],requests:[],feed:[],nightOuts:[],notifications:[]};socialCacheUpdatedAt=0;socialLoadPromise=null;communityRecipeState={items:[],saved:[],loading:false,loadedAt:0,error:null};route='home';routeArgs={};
 }
 async function initializeCloud(){
  if(!sb){cloudBooting=false;render();return}
@@ -2877,5 +2921,5 @@ let socialNotificationPoll=null;
 function startSocialNotificationPolling(){if(socialNotificationPoll)clearInterval(socialNotificationPoll);socialNotificationPoll=setInterval(()=>{if(authUser&&activeDataUserId===authUser.id)loadSocialNotifications(authUser.id)},30000)}
 
 function render(){evaluateNotifications();stopWorkoutClock();if(!entryUnlocked)return entry();if(route==='home')home();else if(route==='plan')plan();else if(route==='workout')workout();else if(route==='active')active();else if(route==='progress')progress();else if(route==='nutrition')nutrition();else if(route==='social')social();else if(route==='chat')chatPage();else if(route==='profile')profile();else home();}
-migrateProfile();if('scrollRestoration'in history)history.scrollRestoration='manual';window.addEventListener('beforeunload',persistActiveSession);window.addEventListener('pagehide',persistActiveSession);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistActiveSession();else if(route==='active'&&data.activeSession)render()});if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=77-community-recipes',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));render();initializeCloud();
+migrateProfile();if('scrollRestoration'in history)history.scrollRestoration='manual';window.addEventListener('beforeunload',persistActiveSession);window.addEventListener('pagehide',persistActiveSession);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistActiveSession();else if(route==='active'&&data.activeSession)render()});if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=78-recovery',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));render();initializeCloud();
 })();
