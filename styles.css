@@ -12,7 +12,7 @@ button,input,select,textarea{font:inherit}button{color:inherit;touch-action:mani
 .hero-art{position:absolute;left:18px;right:18px;top:16px;height:132px;z-index:2;pointer-events:none}
 .hero-mascot-row{height:124px;display:grid;grid-template-columns:124px minmax(0,1fr);align-items:center;gap:12px;max-width:290px;margin-left:auto}
 .hero-mascot-ring{position:relative;width:124px;height:124px;border-radius:50%;border:2px solid var(--lime);background:#0a0d12;box-shadow:0 0 0 4px rgba(216,255,40,.05),0 0 25px rgba(255,63,159,.2);overflow:hidden}
-.hero-mascot{display:block;width:100%;height:100%;object-fit:cover;object-position:center;border:0;background:#0a0d12}
+.hero-mascot{display:block;width:100%;height:100%;object-fit:cover;object-position:center;border:0;background:#0a0d12;transform:scale(1.42)}
 .unicorn-speech{position:relative;width:100%;min-height:76px;padding:12px 13px;border-radius:16px;background:linear-gradient(145deg,#151a22,#0e1218);color:#f7f7fa;border:1.5px solid rgba(255,63,159,.9);box-shadow:0 8px 24px rgba(0,0,0,.38),0 0 18px rgba(255,63,159,.12);font-size:10px;line-height:1.28;font-weight:800;text-align:left}
 .unicorn-speech:after{content:"";position:absolute;left:-7px;top:28px;width:12px;height:12px;background:#121720;border-left:1.5px solid rgba(255,63,159,.9);border-bottom:1.5px solid rgba(255,63,159,.9);transform:rotate(45deg)}
 .mascot-state-label{position:absolute;right:0;top:132px;display:block;width:max-content;max-width:150px;padding:5px 9px;border-radius:999px;background:#0b0e13;border:1px solid rgba(255,255,255,.14);font-size:8px;line-height:1.1;font-weight:950;letter-spacing:.07em;color:var(--lime);white-space:nowrap;text-align:center}
@@ -465,8 +465,6 @@ button.timed-set-icon:focus-visible{outline:2px solid var(--pink,#ff4fa3);outlin
 .feed-pr-highlights b{flex:0 0 auto;color:#ffd85a}
 
 /* v68 Gayer Social */
-.drag-gym-card{width:100%;display:flex;align-items:center;justify-content:space-between;gap:14px;text-align:left;border:1px solid rgba(255,45,166,.35);background:linear-gradient(135deg,rgba(255,45,166,.12),rgba(111,255,164,.05));color:inherit}
-.drag-gym-card span{font-weight:900;letter-spacing:.05em}.drag-gym-card small{color:var(--muted);max-width:48%;text-align:right}
 .gay-week-card{padding:18px}.gay-week-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:14px 0}.gay-week-grid span{padding:10px 6px;border-radius:14px;background:rgba(255,255,255,.045);text-align:center}.gay-week-grid b{display:block;font-size:20px}.gay-week-grid small{display:block;font-size:9px;color:var(--muted);margin-top:4px}.gay-week-card>p{margin:0;color:var(--muted)}
 .night-radar{padding:14px;margin-bottom:16px;border-color:rgba(121,92,255,.35)}.night-radar>button{width:100%;display:flex;align-items:center;gap:10px;background:none;border:0;color:inherit;padding:10px 0;text-align:left}.night-radar>button+button{border-top:1px solid rgba(255,255,255,.07)}.night-radar>button span:nth-child(2){display:flex;flex-direction:column;flex:1}.night-radar small{color:var(--muted);margin-top:2px}
 .gay-reaction-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.gay-reaction-grid button{min-height:56px;border-radius:16px;border:1px solid rgba(255,45,166,.35);background:rgba(255,45,166,.08);color:var(--text);font-weight:900;letter-spacing:.08em}.gay-reaction-grid button:last-child{grid-column:1/-1}
@@ -474,7 +472,7 @@ button.timed-set-icon:focus-visible{outline:2px solid var(--pink,#ff4fa3);outlin
 .activity-workout-photo{display:block;width:100%;max-height:320px;object-fit:cover;border-radius:16px;margin:12px 0}.activity-workout-photo.detail{max-height:420px}.achievement-detail-card{margin:12px 0;padding:14px;border-radius:16px;background:rgba(255,45,166,.08);border:1px solid rgba(255,45,166,.25)}.achievement-detail-card span{font-size:10px;letter-spacing:.08em;color:var(--pink);font-weight:900}.achievement-card{border-color:rgba(255,210,74,.32)}
 .workout-photo-add{margin:16px 0;padding:14px;border-radius:18px;background:rgba(255,255,255,.035)}
 .home-intro.pride-mode{position:relative}.home-intro.pride-mode:after{content:"PRIDE MODE";display:inline-flex;margin-top:8px;font-size:9px;font-weight:900;letter-spacing:.14em;padding:5px 9px;border-radius:999px;background:linear-gradient(90deg,rgba(255,70,70,.2),rgba(255,190,70,.2),rgba(90,255,130,.2),rgba(70,160,255,.2),rgba(180,90,255,.2));border:1px solid rgba(255,255,255,.16)}
-@media(max-width:420px){.gay-week-grid{grid-template-columns:repeat(2,1fr)}.activity-actions{flex-wrap:wrap}.activity-actions>button{flex:1 1 30%}.drag-gym-card{align-items:flex-start;flex-direction:column}.drag-gym-card small{max-width:none;text-align:left}}
+@media(max-width:420px){.gay-week-grid{grid-template-columns:repeat(2,1fr)}.activity-actions{flex-wrap:wrap}.activity-actions>button{flex:1 1 30%}}
 
 
 /* v69: Friends Night Out radar + finish-workout mobile safety */
@@ -708,6 +706,23 @@ body{background:
   .pb-neon-kicker{font-size:26px}.pb-unicorn-aura{width:220px;height:220px}.pb-lift-value{font-size:43px}.pb-neon-sass{font-size:13px}
 }
 @media(prefers-reduced-motion:reduce){.pb-neon-stage,.pb-unicorn-aura,.pb-neon-stars i,.pb-neon-kicker{animation:none!important}}
+
+/* v87: full-card HD unicorn hero. The character is artwork, not a framed avatar. */
+.hero-card{min-height:520px;padding:18px;background:#080309;isolation:isolate}
+.hero-card:before{z-index:2;background:linear-gradient(90deg,rgba(5,2,7,.83) 0%,rgba(5,2,7,.48) 47%,rgba(5,2,7,.08) 78%),linear-gradient(180deg,rgba(5,2,7,.08) 0%,rgba(5,2,7,.18) 38%,rgba(5,2,7,.92) 69%,#050207 100%)}
+.hero-card:after{z-index:5}
+.hero-art.hero-art-full{inset:0;height:100%;z-index:1;overflow:hidden;border-radius:inherit}
+.hero-mascot.hero-mascot-full{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:58% 34%;transform:none;background:#080309;opacity:.82;filter:saturate(1.04) contrast(1.03)}
+.hero-image-shade{position:absolute;inset:0;background:radial-gradient(circle at 78% 22%,transparent 0 26%,rgba(5,2,7,.14) 55%,rgba(5,2,7,.42) 100%)}
+.unicorn-speech.unicorn-speech-overlay{position:absolute;z-index:3;left:18px;top:22px;width:min(58%,270px);min-height:0;padding:13px 14px;border-radius:15px;background:rgba(7,3,8,.76);border:1px solid rgba(255,63,159,.62);box-shadow:0 8px 28px rgba(0,0,0,.38),0 0 20px rgba(255,47,159,.13);backdrop-filter:blur(8px);font-size:11px;line-height:1.36}
+.unicorn-speech.unicorn-speech-overlay:after{display:none}
+.hero-art-full .mascot-state-label{z-index:3;left:18px;right:auto;top:calc(22px + 88px);max-width:58%;background:rgba(7,3,8,.70);border-color:rgba(255,63,159,.3);color:#ff9ad3;backdrop-filter:blur(7px)}
+.hero-content{z-index:4;padding-top:300px;text-shadow:0 2px 12px rgba(0,0,0,.62)}
+.hero-content .meta,.hero-content .stat-pill{text-shadow:none}
+.night-out-home-btn{top:210px;z-index:6}
+.hero-art-full.pr .hero-mascot-full{filter:saturate(1.12) contrast(1.04) drop-shadow(0 0 16px rgba(255,176,0,.18))}
+.hero-art-full.party-active .hero-mascot-full{animation:gaymParty 2.4s ease-in-out infinite}
+@media(max-width:390px){.hero-card{min-height:500px;padding:16px}.hero-art.hero-art-full{inset:0;height:100%}.hero-mascot.hero-mascot-full{object-position:59% 33%}.unicorn-speech.unicorn-speech-overlay{left:14px;top:16px;width:61%;padding:11px 12px;font-size:10px}.hero-art-full .mascot-state-label{left:14px;top:104px;max-width:61%;font-size:7px}.hero-content{padding-top:286px}.night-out-home-btn{top:198px}}
 
 /* v84 local font + mascot refinement */
 .attitude,.script-title,.pb-neon-kicker,.pb-lift-name{font-family:"Bangers","Segoe Print",cursive!important;letter-spacing:.035em}
