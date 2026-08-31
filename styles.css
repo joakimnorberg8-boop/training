@@ -468,9 +468,9 @@ button.timed-set-icon:focus-visible{outline:2px solid var(--pink,#ff4fa3);outlin
 .gay-week-card{padding:18px}.gay-week-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:14px 0}.gay-week-grid span{padding:10px 6px;border-radius:14px;background:rgba(255,255,255,.045);text-align:center}.gay-week-grid b{display:block;font-size:20px}.gay-week-grid small{display:block;font-size:9px;color:var(--muted);margin-top:4px}.gay-week-card>p{margin:0;color:var(--muted)}
 .night-radar{padding:14px;margin-bottom:16px;border-color:rgba(121,92,255,.35)}.night-radar>button{width:100%;display:flex;align-items:center;gap:10px;background:none;border:0;color:inherit;padding:10px 0;text-align:left}.night-radar>button+button{border-top:1px solid rgba(255,255,255,.07)}.night-radar>button span:nth-child(2){display:flex;flex-direction:column;flex:1}.night-radar small{color:var(--muted);margin-top:2px}
 .gay-reaction-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.gay-reaction-grid button{min-height:56px;border-radius:16px;border:1px solid rgba(255,45,166,.35);background:rgba(255,45,166,.08);color:var(--text);font-weight:900;letter-spacing:.08em}.gay-reaction-grid button:last-child{grid-column:1/-1}
-.reaction-summary{display:flex;flex-wrap:wrap;gap:6px;padding:0 14px 10px}.reaction-summary span,.pump-chip{font-size:10px;font-weight:900;letter-spacing:.05em;padding:6px 8px;border-radius:999px;background:rgba(255,45,166,.10);border:1px solid rgba(255,45,166,.22)}
-.activity-workout-photo{display:block;width:100%;max-height:320px;object-fit:cover;border-radius:16px;margin:12px 0}.activity-workout-photo.detail{max-height:420px}.pump-detail,.achievement-detail-card{margin:12px 0;padding:14px;border-radius:16px;background:rgba(255,45,166,.08);border:1px solid rgba(255,45,166,.25)}.pump-detail{display:flex;justify-content:space-between;align-items:center}.pump-detail span,.achievement-detail-card span{font-size:10px;letter-spacing:.08em;color:var(--pink);font-weight:900}.pump-detail strong{font-size:18px}.achievement-card{border-color:rgba(255,210,74,.32)}
-.pump-check,.workout-photo-add{margin:16px 0;padding:14px;border-radius:18px;background:rgba(255,255,255,.035)}.pump-options{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}.pump-options button{padding:11px;border-radius:13px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.035);color:var(--text);font-weight:800}.pump-options button.active{border-color:var(--pink);background:rgba(255,45,166,.13)}
+.reaction-summary{display:flex;flex-wrap:wrap;gap:6px;padding:0 14px 10px}.reaction-summary span{font-size:10px;font-weight:900;letter-spacing:.05em;padding:6px 8px;border-radius:999px;background:rgba(255,45,166,.10);border:1px solid rgba(255,45,166,.22)}
+.activity-workout-photo{display:block;width:100%;max-height:320px;object-fit:cover;border-radius:16px;margin:12px 0}.activity-workout-photo.detail{max-height:420px}.achievement-detail-card{margin:12px 0;padding:14px;border-radius:16px;background:rgba(255,45,166,.08);border:1px solid rgba(255,45,166,.25)}.achievement-detail-card span{font-size:10px;letter-spacing:.08em;color:var(--pink);font-weight:900}.achievement-card{border-color:rgba(255,210,74,.32)}
+.workout-photo-add{margin:16px 0;padding:14px;border-radius:18px;background:rgba(255,255,255,.035)}
 .home-intro.pride-mode{position:relative}.home-intro.pride-mode:after{content:"PRIDE MODE";display:inline-flex;margin-top:8px;font-size:9px;font-weight:900;letter-spacing:.14em;padding:5px 9px;border-radius:999px;background:linear-gradient(90deg,rgba(255,70,70,.2),rgba(255,190,70,.2),rgba(90,255,130,.2),rgba(70,160,255,.2),rgba(180,90,255,.2));border:1px solid rgba(255,255,255,.16)}
 @media(max-width:420px){.gay-week-grid{grid-template-columns:repeat(2,1fr)}.activity-actions{flex-wrap:wrap}.activity-actions>button{flex:1 1 30%}.drag-gym-card{align-items:flex-start;flex-direction:column}.drag-gym-card small{max-width:none;text-align:left}}
 
@@ -504,8 +504,8 @@ button.timed-set-icon:focus-visible{outline:2px solid var(--pink,#ff4fa3);outlin
  .finish-workout-sheet .finish-celebration>h2{font-size:24px}
  .finish-workout-sheet .finish-stats{gap:5px}
  .finish-workout-sheet .finish-stats span{min-height:58px}
- .finish-workout-sheet .pump-check,.finish-workout-sheet .workout-photo-add{padding:12px;margin:12px 0}
- .finish-workout-sheet .pump-options{grid-template-columns:1fr 1fr}
+ .finish-workout-sheet .workout-photo-add{padding:12px;margin:12px 0}
+
 }
 /* v69 audit fix: reactions added a third action in v68, so keep all three on one row. */
 .activity-actions{grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -559,3 +559,6 @@ button.timed-set-icon:focus-visible{outline:2px solid var(--pink,#ff4fa3);outlin
 .community-recipe-card small{display:block;margin-top:8px;color:var(--muted)}
 .community-recipe-grid{margin-top:14px}
 @media(max-width:430px){.nutrition-tabs-three button{font-size:11px;padding-left:6px;padding-right:6px}}
+
+/* v82: active workout exercise reordering */
+.exercise-order-controls{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 0 12px}.exercise-order-controls .small-btn{width:100%;min-width:0}.exercise-order-controls .small-btn:disabled{opacity:.28;pointer-events:none}
