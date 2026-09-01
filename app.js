@@ -23,7 +23,7 @@ const defaults={
  planned:[], activeSession:null, profileCreated:false, sassSeed:null, dailySass:{date:null,text:''},
  notificationSettings:{workout:true,nutrition:true,progress:true,dailySass:true,unhinged:true,dailyTime:'09:00',nutritionTime:'19:00'},
  updatedAt:0,
- notifications:[], notificationMeta:{dailySassDate:null,nutritionDate:null,absenceDate:null,streakMilestone:null}, unicornEvent:null, coachCheckins:[], bottomCheckins:[], nightOut:null, prideMode:'auto', selectedTitle:'', achievementMeta:{}, beginnerEquipment:['dumbbells','barbell','mat']
+ notifications:[], notificationMeta:{dailySassDate:null,nutritionDate:null,absenceDate:null,streakMilestone:null}, unicornEvent:null, unicornBrain:{date:null,slot:null,topic:null,recent:[]}, coachCheckins:[], bottomCheckins:[], nightOut:null, prideMode:'auto', selectedTitle:'', achievementMeta:{}, beginnerEquipment:['dumbbells','barbell','mat']
 };
 
 const sass={
@@ -112,7 +112,7 @@ function workoutFlavor(session){
 function sassContext(){
  const st=todayState();let group='welcome',key='welcome';
  if(st.active){group='active';key=`active:${st.active.id}`}
- else if(st.pr){group='prHome';key=`pr:${st.session?.id||st.pr.sessionId||st.pr.exercise||'today'}`}
+ else if(st.pr&&latestPrMoment(st)&&Date.now()-latestPrMoment(st)<2*60*60000){group='prHome';key=`pr:${st.session?.id||st.pr.sessionId||st.pr.exercise||'today'}`}
  else if(st.sessions.length>1){
   group='multi';key=`multi:${st.sessions.map(s=>s.id).sort().join(':')}`;
  }else if(st.session){
@@ -164,6 +164,8 @@ function normalizeLocalData(){
  if(/You said BUILD MUSCLE|Eat the fucking food/i.test(data.dailySass?.text||''))data.dailySass={date:null,text:''};
  data.planned=(data.planned||[]).filter(x=>x&&(x.type==='rest'||x.workoutId));
  data.dailySass=data.dailySass&&typeof data.dailySass==='object'?data.dailySass:{date:null,text:''};
+ data.unicornBrain=data.unicornBrain&&typeof data.unicornBrain==='object'?data.unicornBrain:{date:null,slot:null,topic:null,recent:[]};
+ data.unicornBrain.recent=Array.isArray(data.unicornBrain.recent)?data.unicornBrain.recent.slice(-4):[];
  data.customRecipes=Array.isArray(data.customRecipes)?data.customRecipes:[];data.recipeFavorites=Array.isArray(data.recipeFavorites)?data.recipeFavorites:[];data.notifications=Array.isArray(data.notifications)?data.notifications:[];data.bottomCheckins=Array.isArray(data.bottomCheckins)?data.bottomCheckins:[];
  data.notificationMeta=Object.assign({dailySassDate:null,nutritionDate:null,absenceDate:null,streakMilestone:null},data.notificationMeta||{});
  recomputePRHistory({notifyNew:false});syncPlannedWorkoutReferences();
@@ -548,31 +550,37 @@ const UNICORN_STATES={
  nightOut:{key:'night-out',label:'NIGHT OUT',image:'assets/unicorns_hd/unicorn_night_out.webp'}
 };
 function unicornWithSass(base,sass){return {...base,sass}}
+function latestPrMoment(st){const session=st.sessions.find(s=>(s.prs||[]).length)||st.session;return Number(session?.finishedAt||session?.startedAt||0)}
+function unicornNutritionLine(st){
+ const nut=st.nutrition,kcalLeft=Math.max(0,Math.round((data.profile.calorieTarget||0)-nut.kcal)),proteinLeft=Math.max(0,Math.round((data.profile.proteinTarget||0)-nut.protein));
+ if(nut.kcalRatio<.70&&nut.proteinRatio<.70)return {state:UNICORN_STATES.hungry,text:st.pr?`The PB was cute. Now feed the muscles that made it happen. ${kcalLeft} kcal and ${proteinLeft} g protein left.`:`${kcalLeft} kcal and ${proteinLeft} g protein left. Your muscles have filed a formal request for dinner.`};
+ if(nut.kcalRatio<.70)return {state:UNICORN_STATES.calories,text:st.pr?`You broke the record. Now carbs have a job to do. ${kcalLeft} kcal left.`:`Protein survived. Your calories did not. ${kcalLeft} kcal left, gorgeous.`};
+ return {state:UNICORN_STATES.protein,text:st.pr?`PB celebrated. Now give it building materials: ${proteinLeft} g protein left.`:`${proteinLeft} g protein left. That number is looking deeply unserious.`};
+}
+function chooseUnicornCandidate(candidates,date){
+ const slot=Math.floor(Date.now()/(45*60000)),brain=data.unicornBrain||{};
+ if(brain.date===date&&brain.slot===slot&&brain.topic){const same=candidates.find(c=>c.topic===brain.topic);if(same)return same}
+ const recent=brain.date===date?(brain.recent||[]):[];
+ candidates.forEach(c=>{if(recent.includes(c.topic))c.score-=c.topic==='pr'?110:34});candidates.sort((a,b)=>b.score-a.score);
+ const chosen=candidates[0];data.unicornBrain={date,slot,topic:chosen.topic,recent:[...recent.filter(x=>x!==chosen.topic),chosen.topic].slice(-4)};save();return chosen;
+}
 function unicornState(){
  const st=todayState(),nut=st.nutrition,night=nightOutState();
  if(night&&night.date===isoToday())return unicornWithSass(UNICORN_STATES.nightOut,night.partyLine||"Night Out active. The macros have entered witness protection.");
  if(st.active)return unicornWithSass(UNICORN_STATES.activeWorkout,voicePick(st.active.beginner?GAYM_VOICE.beginner:GAYM_VOICE.active,`active-${st.active.id}-${isoToday()}`));
- if(st.pr){const exercise=st.pr.exercise||st.pr.name||'that lift',weight=st.pr.weight?` ${st.pr.weight} kg${st.pr.reps?` × ${st.pr.reps}`:''}.`:'';return unicornWithSass(UNICORN_STATES.pr,`NEW PB · ${exercise}!${weight} ${voicePick(GAYM_VOICE.pr,`pr-${exercise}-${st.pr.weight}-${st.pr.reps}`)}`)}
- if(st.sessions.length>1){
-  const cardio=st.sessions.filter(s=>s.type==='cardio').length,strength=st.sessions.length-cardio;
-  const mix=cardio&&strength?`${strength} strength + ${cardio} cardio`:`${st.sessions.length} workouts`;
-  return unicornWithSass(UNICORN_STATES.activeWorkout,`${mix} today. ${voicePick(GAYM_VOICE.multi,`multi-${isoToday()}-${st.sessions.length}`)}`);
- }
- if(st.session){
-  if(st.pendingPlanned)return unicornWithSass(UNICORN_STATES.newWorkout,`${st.session.name} logged. ${st.pendingPlanned.name||'Your planned workout'} is still waiting.`);
-  if(nut.kcalRatio>=.72&&nut.proteinRatio>=.72)return unicornWithSass(UNICORN_STATES.fed,voicePick(GAYM_VOICE.fed,`fed-${isoToday()}`));
-  return unicornWithSass(UNICORN_STATES.activeWorkout,voicePick(GAYM_VOICE.trained,`trained-${isoToday()}-${st.session.id}`));
- }
- if(st.rest)return unicornWithSass(UNICORN_STATES.rest,voicePick(GAYM_VOICE.rest,`rest-${isoToday()}`));
- if(st.gap!==null&&st.gap>=4)return unicornWithSass(UNICORN_STATES.judging,`${st.gap} days without training. ${voicePick(GAYM_VOICE.gap,`gap-${isoToday()}`)}`);
- const nutritionCheck=notificationTimeReached(notificationSettings().nutritionTime||'19:00');
- if(nutritionCheck){const kcalLeft=Math.max(0,Math.round((data.profile.calorieTarget||0)-nut.kcal)),proteinLeft=Math.max(0,Math.round((data.profile.proteinTarget||0)-nut.protein));if(nut.kcalRatio<.70&&nut.proteinRatio<.70)return unicornWithSass(UNICORN_STATES.hungry,`${kcalLeft} kcal and ${proteinLeft} g protein left. Go eat.`);if(nut.kcalRatio<.70&&nut.proteinRatio>=.70)return unicornWithSass(UNICORN_STATES.calories,`${kcalLeft} kcal left. Protein survived. Your calories did not.`);if(nut.proteinRatio<.70&&nut.kcalRatio>=.70)return unicornWithSass(UNICORN_STATES.protein,`${proteinLeft} g protein left. That number is looking tragic.`)}
- if(st.streak>=3)return unicornWithSass(UNICORN_STATES.streak,`${st.streak} day streak. ${voicePick(GAYM_VOICE.streak,`streak-${isoToday()}`)}`);
- if(st.planned&&!st.rest)return unicornWithSass(UNICORN_STATES.newWorkout,`${st.planned.name||'Workout'} is waiting. You know what to do.`);
- if(st.hour>=22||st.hour<5)return unicornWithSass(UNICORN_STATES.late,voicePick(GAYM_VOICE.late,`late-${isoToday()}`));
- if(st.hour<10)return unicornWithSass(UNICORN_STATES.morning,voicePick(GAYM_VOICE.morning,`morning-${isoToday()}`));
- if(st.hour<17)return unicornWithSass(UNICORN_STATES.afternoon,voicePick(GAYM_VOICE.afternoon,`afternoon-${isoToday()}`));
- return unicornWithSass(UNICORN_STATES.evening,voicePick(GAYM_VOICE.evening,`evening-${isoToday()}`));
+ const candidates=[],add=(topic,score,state,text)=>candidates.push({topic,score,state,text});
+ const late=st.hour>=22||st.hour<5,dayProgress=st.hour<5?1:Math.min(1,Math.max(.15,(st.hour-7)/15));
+ if(st.pr){const exercise=st.pr.exercise||st.pr.name||'that lift',weight=st.pr.weight?` ${st.pr.weight} kg${st.pr.reps?` × ${st.pr.reps}`:''}.`:'';const moment=latestPrMoment(st),age=moment?Date.now()-moment:Infinity;if(age<2*60*60000)add('pr',age<30*60000?125:88,UNICORN_STATES.pr,`NEW PB · ${exercise}!${weight} ${voicePick(GAYM_VOICE.pr,`pr-${exercise}-${st.pr.weight}-${st.pr.reps}`)}`)}
+ if(st.sessions.length>1){const cardio=st.sessions.filter(s=>s.type==='cardio').length,strength=st.sessions.length-cardio,mix=cardio&&strength?`${strength} strength + ${cardio} cardio`:`${st.sessions.length} workouts`;add('multi',78,UNICORN_STATES.activeWorkout,`${mix} today. ${voicePick(GAYM_VOICE.multi,`multi-${isoToday()}-${st.sessions.length}`)}`)}
+ if(st.pendingPlanned)add('planned',82,UNICORN_STATES.newWorkout,`${st.session?.name||'One workout'} logged. ${st.pendingPlanned.name||'Your planned workout'} is still waiting. Ambitious. Concerning. Hot.`);else if(st.planned&&!st.rest&&!st.session)add('planned',54+(st.hour>=17?20:0),UNICORN_STATES.newWorkout,`${st.planned.name||'Workout'} is waiting. The weights are being very brave about it.`);
+ if(st.session){if(nut.kcalRatio>=.88&&nut.proteinRatio>=.88)add('fed',70,UNICORN_STATES.fed,voicePick(GAYM_VOICE.fed,`fed-${isoToday()}`));else add('trained',58,UNICORN_STATES.activeWorkout,voicePick(GAYM_VOICE.trained,`trained-${isoToday()}-${st.session.id}`))}
+ if(st.rest)add('rest',78,UNICORN_STATES.rest,late?'Rest day nearly complete. You lifted nothing but standards. Now go to bed.':voicePick(GAYM_VOICE.rest,`rest-${isoToday()}`));
+ if(st.gap!==null&&st.gap>=4)add('gap',66+(st.gap*2),UNICORN_STATES.judging,`${st.gap} days without training. ${voicePick(GAYM_VOICE.gap,`gap-${isoToday()}`)}`);
+ const nutritionBehind=(nut.kcalRatio<Math.max(.45,dayProgress-.18)||nut.proteinRatio<Math.max(.45,dayProgress-.18))&&(st.hour>=12||late);
+ if(nutritionBehind){const line=unicornNutritionLine(st);add('nutrition',60+Math.round(dayProgress*38)+(late?18:0)+(st.session?10:0),line.state,late?`It is nearly bedtime and the nutrition math is still not mathing. ${line.text}`:line.text)}
+ if(st.streak>=3)add('streak',52+Math.min(22,st.streak*2),UNICORN_STATES.streak,st.session?`${st.streak} days showing up. That's not motivation anymore, babe. That's a habit.`:`${st.streak} day streak. ${voicePick(GAYM_VOICE.streak,`streak-${isoToday()}`)}`);
+ if(late)add('late',72+(st.hour>=23||st.hour<5?12:0),UNICORN_STATES.late,st.session&&nut.kcalRatio>=.85&&nut.proteinRatio>=.85?`It is late. Gym done, food handled. You may now become horizontal.`:voicePick(GAYM_VOICE.late,`late-${isoToday()}`));else if(st.hour<10)add('time',42,UNICORN_STATES.morning,voicePick(GAYM_VOICE.morning,`morning-${isoToday()}`));else if(st.hour<17)add('time',38,UNICORN_STATES.afternoon,voicePick(GAYM_VOICE.afternoon,`afternoon-${isoToday()}`));else add('time',46,UNICORN_STATES.evening,voicePick(GAYM_VOICE.evening,`evening-${isoToday()}`));
+ const chosen=chooseUnicornCandidate(candidates,st.date);return unicornWithSass(chosen.state,chosen.text);
 }
 function unicornPersonalityLevel(){const n=(data.sessions||[]).length,prs=(data.sessions||[]).reduce((a,s)=>a+(s.prs?.length||0),0);if(n>=100||prs>=20)return 'ICON';if(n>=50||prs>=10)return 'MENACE';if(n>=15||prs>=3)return 'REGULAR';return 'BABY GAYM'}
 function unicornMood(){const u=unicornState();return {mood:u.key,label:u.label,image:u.image,sass:u.sass}}
@@ -2911,5 +2919,5 @@ let socialNotificationPoll=null;
 function startSocialNotificationPolling(){if(socialNotificationPoll)clearInterval(socialNotificationPoll);socialNotificationPoll=setInterval(()=>{if(authUser&&activeDataUserId===authUser.id)loadSocialNotifications(authUser.id)},30000)}
 
 function render(){evaluateNotifications();stopWorkoutClock();if(!entryUnlocked)return entry();if(route==='home')home();else if(route==='plan')plan();else if(route==='workout')workout();else if(route==='active')active();else if(route==='progress')progress();else if(route==='nutrition')nutrition();else if(route==='social')social();else if(route==='chat')chatPage();else if(route==='profile')profile();else home();}
-migrateProfile();if('scrollRestoration'in history)history.scrollRestoration='manual';window.addEventListener('beforeunload',persistActiveSession);window.addEventListener('pagehide',persistActiveSession);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistActiveSession();else if(route==='active'&&data.activeSession)render()});if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=92-account-restore',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));render();initializeCloud();
+migrateProfile();if('scrollRestoration'in history)history.scrollRestoration='manual';window.addEventListener('beforeunload',persistActiveSession);window.addEventListener('pagehide',persistActiveSession);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistActiveSession();else if(route==='active'&&data.activeSession)render()});if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=94-unicorn-brain',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));render();initializeCloud();
 })();
