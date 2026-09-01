@@ -1,6 +1,6 @@
 (()=>{
 'use strict';
-// GAYM v95 CLOUD SYNC REPAIR: verified cross-device account sync with conflict protection.
+// GAYM v96 HISTORY RECOVERY: verified cross-device sync plus non-destructive workout recovery.
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 
 const SUPABASE_URL='https://dkiejeckkwzowpkxapbc.supabase.co';
@@ -15,7 +15,7 @@ let socialCache={friends:[],requests:[],feed:[],nightOuts:[],sharedRecipes:[],no
 let socialCacheUpdatedAt=0,socialLoadPromise=null;
 const SOCIAL_CACHE_TTL=15000;
 let activeDataUserId=null,authEpoch=0,cloudDataHydrated=false,cloudSyncTimer=null,cloudSyncRetryTimer=null,cloudSyncRetryCount=0;
-let cloudSyncMeta={dirty:false,lastRemoteUpdatedAt:0,lastSyncedAt:0,lastLocalHash:'',lastSyncedHash:''};
+let cloudSyncMeta={dirty:false,lastRemoteUpdatedAt:0,lastSyncedAt:0,lastLocalHash:'',lastSyncedHash:'',lastRemoteSessionCount:0};
 let cloudSyncState={status:'idle',error:'',conflict:null};
 
 const icons={home:'<svg viewBox="0 0 24 24"><path d="M3 10.8 12 3l9 7.8v9.2a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg>',plan:'<svg viewBox="0 0 24 24"><path d="M6 3v3M18 3v3M4 8h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1z"/><path d="M8 12h3M8 16h3M14 12h2M14 16h2"/></svg>',social:'<svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M2.8 20c.5-3.7 2.5-5.5 5.2-5.5s4.7 1.8 5.2 5.5M13.5 15.2c1-.7 2.1-1 3.5-1 2.4 0 4 1.5 4.5 4.8"/></svg>',workout:'<svg viewBox="0 0 24 24"><path d="M6 8v8M18 8v8M3 10v4M21 10v4M6 12h12"/></svg>',progress:'<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',profile:'<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c.8-4 3.5-6 8-6s7.2 2 8 6"/></svg>',bell:'<svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>',plus:'<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',back:'<svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>',menu:'<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>',dots:'<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none"/></svg>'};
@@ -154,8 +154,10 @@ function isoToday(d=new Date()){const y=d.getFullYear(),m=String(d.getMonth()+1)
 const LOCAL_DATA_PREFIX='gaymV2:user:';
 const LEGACY_LOCAL_KEY='gaymV2';
 const SYNC_META_PREFIX='gaymSyncV1:user:';
+const HISTORY_RECOVERY_PREFIX='gaymHistoryRecoveryV96:user:';
 function accountLocalKey(userId){return userId?`${LOCAL_DATA_PREFIX}${userId}`:null}
 function accountSyncMetaKey(userId){return userId?`${SYNC_META_PREFIX}${userId}`:null}
+function historyRecoveryKey(userId){return userId?`${HISTORY_RECOVERY_PREFIX}${userId}`:null}
 function loadForUser(userId){
  if(!userId)return structuredClone(defaults);
  try{
@@ -164,10 +166,12 @@ function loadForUser(userId){
  }catch{return structuredClone(defaults)}
 }
 function loadSyncMeta(userId){
- if(!userId)return {dirty:false,lastRemoteUpdatedAt:0,lastSyncedAt:0,lastLocalHash:'',lastSyncedHash:''};
- try{return Object.assign({dirty:false,lastRemoteUpdatedAt:0,lastSyncedAt:0,lastLocalHash:'',lastSyncedHash:''},JSON.parse(localStorage.getItem(accountSyncMetaKey(userId))||'{}'))}catch{return {dirty:false,lastRemoteUpdatedAt:0,lastSyncedAt:0,lastLocalHash:'',lastSyncedHash:''}}
+ if(!userId)return {dirty:false,lastRemoteUpdatedAt:0,lastSyncedAt:0,lastLocalHash:'',lastSyncedHash:'',lastRemoteSessionCount:0};
+ try{return Object.assign({dirty:false,lastRemoteUpdatedAt:0,lastSyncedAt:0,lastLocalHash:'',lastSyncedHash:'',lastRemoteSessionCount:0},JSON.parse(localStorage.getItem(accountSyncMetaKey(userId))||'{}'))}catch{return {dirty:false,lastRemoteUpdatedAt:0,lastSyncedAt:0,lastLocalHash:'',lastSyncedHash:'',lastRemoteSessionCount:0}}
 }
 function persistSyncMeta(){if(!activeDataUserId)return false;try{localStorage.setItem(accountSyncMetaKey(activeDataUserId),JSON.stringify(cloudSyncMeta));return true}catch(e){console.error('save sync metadata',e);return false}}
+function historyRecoveryDone(userId=activeDataUserId){if(!userId)return false;try{return localStorage.getItem(historyRecoveryKey(userId))==='done'}catch{return false}}
+function markHistoryRecoveryDone(userId=activeDataUserId){if(!userId)return;try{localStorage.setItem(historyRecoveryKey(userId),'done')}catch{}}
 function stableStringify(value){
  if(value===null||typeof value!=='object')return JSON.stringify(value);
  if(Array.isArray(value))return `[${value.map(stableStringify).join(',')}]`;
@@ -181,6 +185,37 @@ function syncContentHash(payload=data){
  const s=stableStringify(syncContentSnapshot(payload));let h=2166136261;
  for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}
  return (h>>>0).toString(36);
+}
+function recoveryItemKey(collection,item,index=0){
+ if(item==null)return `null:${index}`;
+ if(typeof item!=='object')return `value:${String(item)}`;
+ if(item.id!=null&&item.id!=='')return `id:${String(item.id)}`;
+ if(collection==='measurements'||collection==='coachCheckins'||collection==='bottomCheckins')return `date:${item.date||index}`;
+ if(collection==='planned')return `plan:${item.date||''}:${item.workoutId||item.type||item.name||index}`;
+ if(collection==='sessions')return `session:${item.date||''}:${item.startedAt||item.finishedAt||''}:${item.workoutId||item.name||item.type||index}`;
+ return `legacy:${stableStringify(item)}`;
+}
+function mergeRecoveryArray(collection,remoteItems,localItems){
+ const merged=[],positions=new Map();
+ for(const [source,preferLocal] of [[Array.isArray(remoteItems)?remoteItems:[],false],[Array.isArray(localItems)?localItems:[],true]]){
+  source.forEach((item,index)=>{
+   const key=recoveryItemKey(collection,item,index),position=positions.get(key),copy=structuredClone(item);
+   if(position==null){positions.set(key,merged.length);merged.push(copy);return}
+   if(preferLocal&&copy&&typeof copy==='object'&&!Array.isArray(copy))merged[position]={...merged[position],...copy};
+  });
+ }
+ return merged;
+}
+const RECOVERY_ARRAY_KEYS=['customWorkouts','customPrograms','sessions','measurements','nutrition','recipeFavorites','customRecipes','planned','coachCheckins','bottomCheckins'];
+function buildRecoveryPayload(remotePayload,localPayload=data){
+ const remote=remotePayload&&typeof remotePayload==='object'?remotePayload:{},local=localPayload&&typeof localPayload==='object'?localPayload:{};
+ const payload=Object.assign({},structuredClone(defaults),remote,local);
+ RECOVERY_ARRAY_KEYS.forEach(key=>{payload[key]=mergeRecoveryArray(key,remote[key],local[key])});
+ return payload;
+}
+function localRecoveryAddsCloudData(remotePayload,localPayload=data){
+ const remote=remotePayload&&typeof remotePayload==='object'?remotePayload:{};
+ return RECOVERY_ARRAY_KEYS.some(key=>mergeRecoveryArray(key,remote[key],localPayload?.[key]).length>(Array.isArray(remote[key])?remote[key].length:0));
 }
 function normalizeLocalData(){
  if(data.activeSession){const now=Date.now();if(!Number.isFinite(Number(data.activeSession.startedAt))||Number(data.activeSession.startedAt)<=0)data.activeSession.startedAt=now;data.activeSession.startedAt=Number(data.activeSession.startedAt);data.activeSession.totalPause=Math.max(0,Number(data.activeSession.totalPause)||0);if(data.activeSession.pausedAt!=null)data.activeSession.pausedAt=Number(data.activeSession.pausedAt)||null;}
@@ -204,7 +239,7 @@ function syncStatusView(){
  if(s==='offline')return {label:'OFFLINE',detail:'Saved on this device · will retry',cls:'offline'};
  if(s==='failed')return {label:'FAILED',detail:cloudSyncState.error||'Could not reach cloud storage',cls:'error'};
  if(s==='conflict')return {label:'NEEDS REVIEW',detail:'Newer data exists on another device',cls:'conflict'};
- if(s==='synced')return {label:'SYNCED',detail:last?`Last confirmed ${last}`:'Cloud copy confirmed',cls:'success'};
+ if(s==='synced'){const count=Math.max(0,Number(cloudSyncMeta.lastRemoteSessionCount)||0),workouts=`${count} workout${count===1?'':'s'} confirmed in cloud`;return {label:'SYNCED',detail:last?`${workouts} · ${last}`:workouts,cls:'success'}}
  return {label:'CHECKING',detail:'Connecting to your account',cls:'idle'};
 }
 function refreshSyncStatusUi(){const el=$('#account-sync-status');if(!el)return;const v=syncStatusView();el.className=`account-sync-status ${v.cls}`;const label=el.querySelector('[data-sync-label]'),detail=el.querySelector('[data-sync-detail]');if(label)label.textContent=v.label;if(detail)detail.textContent=v.detail;el.onclick=cloudSyncState.status==='conflict'?()=>openCloudSyncConflict():null}
@@ -222,7 +257,7 @@ function applyRemoteAccountData(remote,{renderAfter=false}={}){
  if(!remote?.payload)return false;
  const remoteTime=remoteAccountUpdatedAt(remote);
  data=Object.assign({},structuredClone(defaults),remote.payload,{updatedAt:Math.max(accountDataUpdatedAt(remote.payload),remoteTime)});normalizeLocalData();persistLocalAccountData();
- const hash=syncContentHash(data);cloudSyncMeta={...cloudSyncMeta,dirty:false,lastRemoteUpdatedAt:remoteTime,lastSyncedAt:Date.now(),lastLocalHash:hash,lastSyncedHash:hash};persistSyncMeta();cloudSyncRetryCount=0;clearTimeout(cloudSyncRetryTimer);setCloudSyncState('synced');if(renderAfter)render();return true;
+ const hash=syncContentHash(data);cloudSyncMeta={...cloudSyncMeta,dirty:false,lastRemoteUpdatedAt:remoteTime,lastSyncedAt:Date.now(),lastLocalHash:hash,lastSyncedHash:hash,lastRemoteSessionCount:(remote.payload.sessions||[]).length};persistSyncMeta();cloudSyncRetryCount=0;clearTimeout(cloudSyncRetryTimer);setCloudSyncState('synced');if(renderAfter)render();return true;
 }
 async function readCloudAccountData(expectedUserId=activeDataUserId){
  if(!sb||!expectedUserId||authUser?.id!==expectedUserId||activeDataUserId!==expectedUserId)return {remote:null,error:new Error('Account changed while syncing.')};
@@ -244,7 +279,7 @@ async function syncCloudAccountData(expectedUserId=activeDataUserId,{force=false
  if(verified.error||!verified.remote?.payload){const verifyError=verified.error||new Error('Cloud copy could not be verified.');console.error('verify cloud account data',verifyError);setCloudSyncState('failed',verifyError.message);scheduleCloudRetry();if(!quiet)toast(`Sync failed: ${verifyError.message}`);return {error:verifyError};}
  const verifiedHash=syncContentHash(verified.remote.payload),localHash=syncContentHash(data);
  if(verifiedHash!==localHash){const verifyError=new Error('The verified cloud copy did not match this device.');setCloudSyncState('failed',verifyError.message);scheduleCloudRetry();if(!quiet)toast(verifyError.message);return {error:verifyError};}
- data.updatedAt=Math.max(accountDataUpdatedAt(verified.remote.payload),remoteAccountUpdatedAt(verified.remote));persistLocalAccountData();cloudSyncMeta={...cloudSyncMeta,dirty:false,lastRemoteUpdatedAt:remoteAccountUpdatedAt(verified.remote),lastSyncedAt:Date.now(),lastLocalHash:localHash,lastSyncedHash:localHash};persistSyncMeta();cloudSyncRetryCount=0;clearTimeout(cloudSyncRetryTimer);setCloudSyncState('synced');return {ok:true,remote:verified.remote};
+ data.updatedAt=Math.max(accountDataUpdatedAt(verified.remote.payload),remoteAccountUpdatedAt(verified.remote));persistLocalAccountData();cloudSyncMeta={...cloudSyncMeta,dirty:false,lastRemoteUpdatedAt:remoteAccountUpdatedAt(verified.remote),lastSyncedAt:Date.now(),lastLocalHash:localHash,lastSyncedHash:localHash,lastRemoteSessionCount:(verified.remote.payload.sessions||[]).length};persistSyncMeta();cloudSyncRetryCount=0;clearTimeout(cloudSyncRetryTimer);setCloudSyncState('synced');return {ok:true,remote:verified.remote};
 }
 async function forceCloudAccountSync(){
  if(!sb||!authUser?.id||activeDataUserId!==authUser.id)return toast('Sign in before syncing.');
@@ -261,12 +296,31 @@ async function forceCloudAccountLoad(){
  if(!remote?.payload){setCloudSyncState('failed','No cloud copy exists yet.');return toast('No account data found in the cloud yet.')}
  applyRemoteAccountData(remote);cloudDataHydrated=true;toast(`Loaded ${(data.sessions||[]).length} workouts from your account.`);profile();
 }
+async function repairCloudWorkoutHistory(){
+ if(!sb||!authUser?.id||activeDataUserId!==authUser.id)return toast('Sign in before repairing sync.');
+ const button=$('#account-repair-history');if(button){button.disabled=true;button.lastElementChild.textContent='CHECKING…'}
+ setCloudSyncState('syncing');const {remote,error}=await readCloudAccountData(authUser.id);
+ if(error){if(button){button.disabled=false;button.lastElementChild.textContent='REPAIR'}setCloudSyncState('failed',error.message);return toast(`Repair failed: ${error.message}`)}
+ const localBefore=(data.sessions||[]).length,cloudBefore=(remote?.payload?.sessions||[]).length;
+ data=buildRecoveryPayload(remote?.payload,data);normalizeLocalData();persistLocalAccountData();cloudDataHydrated=true;
+ const remoteTime=remoteAccountUpdatedAt(remote),remoteHash=remote?.payload?syncContentHash(remote.payload):'';
+ cloudSyncMeta={...cloudSyncMeta,dirty:true,lastRemoteUpdatedAt:remoteTime,lastSyncedHash:remoteHash,lastLocalHash:syncContentHash(data),lastRemoteSessionCount:cloudBefore};persistSyncMeta();markHistoryRecoveryDone();
+ const result=await syncCloudAccountData(authUser.id,{force:true});
+ if(button){button.disabled=false;button.lastElementChild.textContent='REPAIR'}
+ if(result?.error)return;
+ const recovered=(data.sessions||[]).length;profile();toast(`Verified ${recovered} workouts · device had ${localBefore}, cloud had ${cloudBefore}.`);
+}
 async function hydrateCloudAccountData(expectedUserId=activeDataUserId){
  if(!sb||!expectedUserId||authUser?.id!==expectedUserId||activeDataUserId!==expectedUserId)return;
  setCloudSyncState('syncing');const {remote,error}=await readCloudAccountData(expectedUserId);
  if(authUser?.id!==expectedUserId||activeDataUserId!==expectedUserId)return;
  if(error){console.error('load account data',error);cloudDataHydrated=true;setCloudSyncState(navigator.onLine===false?'offline':'failed',error.message);scheduleCloudRetry();return}
  const remoteTime=remoteAccountUpdatedAt(remote),remoteHasContent=hasAccountContent(remote?.payload),localHasContent=hasAccountContent();
+ if(remote?.payload&&!historyRecoveryDone(expectedUserId)&&localRecoveryAddsCloudData(remote.payload,data)){
+  data=buildRecoveryPayload(remote.payload,data);normalizeLocalData();persistLocalAccountData();cloudDataHydrated=true;
+  cloudSyncMeta={...cloudSyncMeta,dirty:true,lastRemoteUpdatedAt:remoteTime,lastSyncedHash:syncContentHash(remote.payload),lastLocalHash:syncContentHash(data),lastRemoteSessionCount:(remote.payload.sessions||[]).length};persistSyncMeta();markHistoryRecoveryDone(expectedUserId);setCloudSyncState('syncing');scheduleCloudAccountSync();return;
+ }
+ markHistoryRecoveryDone(expectedUserId);
  if(remoteHasContent){
   if(cloudSyncMeta.dirty&&cloudSyncMeta.lastRemoteUpdatedAt&&remoteTime>cloudSyncMeta.lastRemoteUpdatedAt){cloudDataHydrated=true;setCloudSyncState('conflict','',remote);return}
   if(!cloudSyncMeta.dirty||!cloudSyncMeta.lastRemoteUpdatedAt)applyRemoteAccountData(remote);
@@ -274,7 +328,7 @@ async function hydrateCloudAccountData(expectedUserId=activeDataUserId){
  cloudDataHydrated=true;
  if((!remote?.payload||(!remoteHasContent&&localHasContent))&&localHasContent){cloudSyncMeta.dirty=true;cloudSyncMeta.lastRemoteUpdatedAt=remoteTime;cloudSyncMeta.lastSyncedHash=remote?.payload?syncContentHash(remote.payload):'';cloudSyncMeta.lastLocalHash=syncContentHash(data);persistSyncMeta();scheduleCloudAccountSync()}
  else if(cloudSyncMeta.dirty)scheduleCloudAccountSync();
- else setCloudSyncState('synced');
+ else{cloudSyncMeta.lastRemoteSessionCount=(remote?.payload?.sessions||[]).length;persistSyncMeta();setCloudSyncState('synced')}
 }
 function openCloudSyncConflict(remote=cloudSyncState.conflict){
  if(!remote?.payload)return toast('Cloud conflict details are no longer available. Try again.');
@@ -2618,7 +2672,7 @@ async function enterAuthenticatedAccount(user){
  await Promise.all([syncRecentActivitiesFromLocal(userId),loadSocialNotifications(userId)]);
 }
 function leaveAuthenticatedAccount(){
- ++authEpoch;clearTimeout(cloudSyncTimer);clearTimeout(cloudSyncRetryTimer);cloudSyncRetryCount=0;cloudDataHydrated=false;authUser=null;activeDataUserId=null;cloudProfile=null;cloudSyncMeta={dirty:false,lastRemoteUpdatedAt:0,lastSyncedAt:0,lastLocalHash:'',lastSyncedHash:''};setCloudSyncState('idle');activityPostCache.clear();socialTab='activity';data=structuredClone(defaults);normalizeLocalData();entryUnlocked=false;socialCache={friends:[],requests:[],feed:[],nightOuts:[],sharedRecipes:[],notifications:[]};socialCacheUpdatedAt=0;socialLoadPromise=null;resetRecipeCloudState();route='home';routeArgs={};
+ ++authEpoch;clearTimeout(cloudSyncTimer);clearTimeout(cloudSyncRetryTimer);cloudSyncRetryCount=0;cloudDataHydrated=false;authUser=null;activeDataUserId=null;cloudProfile=null;cloudSyncMeta={dirty:false,lastRemoteUpdatedAt:0,lastSyncedAt:0,lastLocalHash:'',lastSyncedHash:'',lastRemoteSessionCount:0};setCloudSyncState('idle');activityPostCache.clear();socialTab='activity';data=structuredClone(defaults);normalizeLocalData();entryUnlocked=false;socialCache={friends:[],requests:[],feed:[],nightOuts:[],sharedRecipes:[],notifications:[]};socialCacheUpdatedAt=0;socialLoadPromise=null;resetRecipeCloudState();route='home';routeArgs={};
 }
 async function initializeCloud(){
  if(!sb){cloudBooting=false;render();return}
@@ -2941,7 +2995,7 @@ function profile(){
  const goalLabel=data.profile.goal==='gain'?'Build muscle':data.profile.goal==='lose'?'Lose weight':'Maintain';
  const weight=Number(data.profile.weight||0),syncView=syncStatusView();
  shell(`${header()}<h1 class="page-title">Profile</h1><section class="section profile-personal-section"><article class="card social-profile-hero own profile-personal-hero">${avatarMarkup(p,'xl')}<div class="social-profile-copy"><p class="eyebrow profile-kicker">YOUR PROFILE</p><h2>${escapeHtml(p.display_name||data.profile.name)}</h2><p>${p.username?`@${escapeHtml(p.username)}`:'Choose a username'}${p.selected_title?` · ${escapeHtml(p.selected_title)}`:''}</p>${p.bio?`<span>${escapeHtml(p.bio)}</span>`:'<span class="subtle">Add a bio, profile photo and title.</span>'}</div><button class="icon-btn social-edit-btn" id="edit-social-profile">EDIT</button></article><div class="profile-personal-stats"><div><span>WEIGHT</span><strong>${weight?`${weight.toFixed(1)} kg`:'—'}</strong></div><div><span>GOAL</span><strong>${escapeHtml(goalLabel)}</strong></div><div><span>WORKOUTS</span><strong>${(data.sessions||[]).length}</strong></div><div><span>STREAK</span><strong>${calcStreak()} days</strong></div></div><button class="secondary profile-body-btn" id="edit-body-profile">BODY & GOAL</button></section><section class="section"><p class="eyebrow">Settings</p><article class="card" style="padding:0 14px"><button class="settings-row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;text-align:left" id="privacy-settings"><span>Privacy & sharing</span><small>Who sees what ›</small></button><button class="settings-row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;text-align:left" id="notification-settings"><span>Notifications</span><small>GAYM sass ›</small></button><button class="settings-row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;text-align:left" id="pride-mode-settings"><span>Pride Mode</span><small>${data.prideMode==='on'?'ON':data.prideMode==='off'?'OFF':'AUTO'} ›</small></button>${hasLegacyLocalData()?`<button class="settings-row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;text-align:left" id="import-legacy-data"><span>Import pre-account data</span><small>ONE TIME ›</small></button>`:''}<button class="settings-row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;text-align:left" id="export-data"><span>Export local data</span><small>JSON ›</small></button><button class="settings-row danger-text" style="width:100%;background:none;border:0;text-align:left" id="sign-out"><span>Log out</span><small>›</small></button></article></section>`);
- const settings=$('#privacy-settings')?.parentElement;if(settings){settings.insertAdjacentHTML('afterbegin',`<div class="account-sync-status ${syncView.cls}" id="account-sync-status"><i></i><span><strong>ACCOUNT SYNC</strong><small data-sync-detail>${escapeHtml(syncView.detail)}</small></span><b data-sync-label>${escapeHtml(syncView.label)}</b></div><button class="settings-row account-sync-row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;text-align:left" id="account-sync-now"><span>Sync this device<small>Upload and verify changes</small></span><small>SYNC NOW</small></button><button class="settings-row account-sync-row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;text-align:left" id="account-load-now"><span>Restore account data<small>Safely load the cloud copy</small></span><small>LOAD CLOUD</small></button>`);$('#account-sync-now').onclick=forceCloudAccountSync;$('#account-load-now').onclick=forceCloudAccountLoad;if(cloudSyncState.status==='conflict')$('#account-sync-status').onclick=()=>openCloudSyncConflict()}$('#edit-social-profile').onclick=openSocialProfileEditor;$('#edit-body-profile').onclick=openProfileSheet;$('#privacy-settings').onclick=openPrivacySettings;$('#notification-settings').onclick=openNotificationSettings;$('#pride-mode-settings').onclick=openPrideModeSettings;const importLegacy=$('#import-legacy-data');if(importLegacy)importLegacy.onclick=importLegacyLocalData;$('#export-data').onclick=exportData;$('#sign-out').onclick=signOutCloud;
+ const settings=$('#privacy-settings')?.parentElement;if(settings){settings.insertAdjacentHTML('afterbegin',`<div class="account-sync-status ${syncView.cls}" id="account-sync-status"><i></i><span><strong>ACCOUNT SYNC</strong><small data-sync-detail>${escapeHtml(syncView.detail)}</small></span><b data-sync-label>${escapeHtml(syncView.label)}</b></div><button class="settings-row account-sync-row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;text-align:left" id="account-sync-now"><span>Sync this device<small>Upload and verify changes</small></span><small>SYNC NOW</small></button><button class="settings-row account-sync-row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;text-align:left" id="account-repair-history"><span>Recover workout history<small>Merge this device with the cloud · deletes nothing</small></span><small>REPAIR</small></button><button class="settings-row account-sync-row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;text-align:left" id="account-load-now"><span>Restore account data<small>Replace this device with the cloud copy</small></span><small>LOAD CLOUD</small></button>`);$('#account-sync-now').onclick=forceCloudAccountSync;$('#account-repair-history').onclick=repairCloudWorkoutHistory;$('#account-load-now').onclick=forceCloudAccountLoad;if(cloudSyncState.status==='conflict')$('#account-sync-status').onclick=()=>openCloudSyncConflict()}$('#edit-social-profile').onclick=openSocialProfileEditor;$('#edit-body-profile').onclick=openProfileSheet;$('#privacy-settings').onclick=openPrivacySettings;$('#notification-settings').onclick=openNotificationSettings;$('#pride-mode-settings').onclick=openPrideModeSettings;const importLegacy=$('#import-legacy-data');if(importLegacy)importLegacy.onclick=importLegacyLocalData;$('#export-data').onclick=exportData;$('#sign-out').onclick=signOutCloud;
 }
 function renderSocialTab(){
  const box=$('#social-tab-content');if(!box)return;const fc=$('#social-friend-count');if(fc)fc.textContent=String(socialCache.friends.length);
@@ -3001,5 +3055,5 @@ function startSocialNotificationPolling(){if(socialNotificationPoll)clearInterva
 function startAccountSyncPolling(){if(accountSyncPoll)clearInterval(accountSyncPoll);accountSyncPoll=setInterval(()=>{if(authUser&&activeDataUserId===authUser.id&&document.visibilityState==='visible')refreshCloudAccountData({renderAfter:route!=='active',quiet:true})},30000)}
 
 function render(){evaluateNotifications();stopWorkoutClock();if(!entryUnlocked)return entry();if(route==='home')home();else if(route==='plan')plan();else if(route==='workout')workout();else if(route==='active')active();else if(route==='progress')progress();else if(route==='nutrition')nutrition();else if(route==='social')social();else if(route==='chat')chatPage();else if(route==='profile')profile();else home();}
-migrateProfile();if('scrollRestoration'in history)history.scrollRestoration='manual';window.addEventListener('beforeunload',persistActiveSession);window.addEventListener('pagehide',persistActiveSession);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistActiveSession();else{if(route==='active'&&data.activeSession)render();refreshCloudAccountData({renderAfter:route!=='active',quiet:true})}});window.addEventListener('focus',()=>refreshCloudAccountData({renderAfter:route!=='active',quiet:true}));window.addEventListener('offline',()=>{if(authUser)setCloudSyncState('offline')});window.addEventListener('online',()=>{if(!authUser)return;setCloudSyncState('syncing');refreshCloudAccountData({renderAfter:route!=='active',quiet:true}).finally(()=>{if(cloudSyncMeta.dirty)scheduleCloudAccountSync()})});if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=95-cloud-sync-repair',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));render();initializeCloud();
+migrateProfile();if('scrollRestoration'in history)history.scrollRestoration='manual';window.addEventListener('beforeunload',persistActiveSession);window.addEventListener('pagehide',persistActiveSession);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistActiveSession();else{if(route==='active'&&data.activeSession)render();refreshCloudAccountData({renderAfter:route!=='active',quiet:true})}});window.addEventListener('focus',()=>refreshCloudAccountData({renderAfter:route!=='active',quiet:true}));window.addEventListener('offline',()=>{if(authUser)setCloudSyncState('offline')});window.addEventListener('online',()=>{if(!authUser)return;setCloudSyncState('syncing');refreshCloudAccountData({renderAfter:route!=='active',quiet:true}).finally(()=>{if(cloudSyncMeta.dirty)scheduleCloudAccountSync()})});if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=96-history-recovery',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));render();initializeCloud();
 })();
