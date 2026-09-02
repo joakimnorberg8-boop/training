@@ -15,6 +15,7 @@ let socialCache={friends:[],requests:[],feed:[],nightOuts:[],sharedRecipes:[],no
 let socialCacheUpdatedAt=0,socialLoadPromise=null;
 const SOCIAL_CACHE_TTL=15000;
 let activeDataUserId=null,authEpoch=0,cloudDataHydrated=false,cloudSyncTimer=null,cloudSyncRetryTimer=null,cloudSyncRetryCount=0;
+const AUTO_ACCOUNT_SYNC=false; // v97 local-first: account_data is manual only
 let cloudSyncMeta={dirty:false,lastRemoteUpdatedAt:0,lastSyncedAt:0,lastLocalHash:'',lastSyncedHash:'',lastRemoteSessionCount:0};
 let cloudSyncState={status:'idle',error:'',conflict:null};
 
@@ -155,9 +156,11 @@ const LOCAL_DATA_PREFIX='gaymV2:user:';
 const LEGACY_LOCAL_KEY='gaymV2';
 const SYNC_META_PREFIX='gaymSyncV1:user:';
 const HISTORY_RECOVERY_PREFIX='gaymHistoryRecoveryV96:user:';
+const LOCAL_BACKUP_PREFIX='gaymV97Backup:user:';
 function accountLocalKey(userId){return userId?`${LOCAL_DATA_PREFIX}${userId}`:null}
 function accountSyncMetaKey(userId){return userId?`${SYNC_META_PREFIX}${userId}`:null}
 function historyRecoveryKey(userId){return userId?`${HISTORY_RECOVERY_PREFIX}${userId}`:null}
+function localBackupKey(userId){return userId?`${LOCAL_BACKUP_PREFIX}${userId}`:null}
 function loadForUser(userId){
  if(!userId)return structuredClone(defaults);
  try{
@@ -232,26 +235,37 @@ function switchAccountLocalData(userId){activeDataUserId=userId||null;data=loadF
 function accountDataUpdatedAt(payload=data){return Math.max(0,Number(payload?.updatedAt)||0)}
 function remoteAccountUpdatedAt(remote){return Math.max(0,new Date(remote?.updated_at||0).getTime()||0)}
 function hasAccountContent(payload=data){return ['customWorkouts','customPrograms','sessions','measurements','nutrition','recipeFavorites','customRecipes','planned','bottomCheckins'].some(key=>Array.isArray(payload?.[key])&&payload[key].length)}
-function persistLocalAccountData(){try{localStorage.setItem(accountLocalKey(activeDataUserId),JSON.stringify(data));return true}catch(e){console.error('save local account data',e);return false}}
+function persistLocalAccountData(){
+ try{
+  const key=accountLocalKey(activeDataUserId),next=JSON.stringify(data),previous=key?localStorage.getItem(key):null;
+  if(previous&&key){
+   try{
+    const oldData=JSON.parse(previous),oldSessions=(oldData?.sessions||[]).map(x=>x?.id).filter(Boolean).join('|'),newSessions=(data?.sessions||[]).map(x=>x?.id).filter(Boolean).join('|');
+    if(oldSessions!==newSessions)localStorage.setItem(localBackupKey(activeDataUserId),previous);
+   }catch{}
+  }
+  localStorage.setItem(key,next);return true;
+ }catch(e){console.error('save local account data',e);return false}
+}
 function syncStatusView(){
  const s=cloudSyncState.status,last=cloudSyncMeta.lastSyncedAt?new Date(cloudSyncMeta.lastSyncedAt).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'';
- if(s==='syncing')return {label:'SYNCING',detail:'Saving changes to your account',cls:'working'};
+ if(s==='local')return {label:'LOCAL ONLY',detail:'Saved on this device · cloud sync is manual',cls:'success'};
+ if(s==='syncing')return {label:'SYNCING',detail:'Manual cloud sync in progress',cls:'working'};
  if(s==='offline')return {label:'OFFLINE',detail:'Saved on this device · will retry',cls:'offline'};
  if(s==='failed')return {label:'FAILED',detail:cloudSyncState.error||'Could not reach cloud storage',cls:'error'};
  if(s==='conflict')return {label:'NEEDS REVIEW',detail:'Newer data exists on another device',cls:'conflict'};
  if(s==='synced'){const count=Math.max(0,Number(cloudSyncMeta.lastRemoteSessionCount)||0),workouts=`${count} workout${count===1?'':'s'} confirmed in cloud`;return {label:'SYNCED',detail:last?`${workouts} · ${last}`:workouts,cls:'success'}}
- return {label:'CHECKING',detail:'Connecting to your account',cls:'idle'};
+ return {label:'LOCAL ONLY',detail:'Saved on this device · cloud sync is manual',cls:'success'};
 }
 function refreshSyncStatusUi(){const el=$('#account-sync-status');if(!el)return;const v=syncStatusView();el.className=`account-sync-status ${v.cls}`;const label=el.querySelector('[data-sync-label]'),detail=el.querySelector('[data-sync-detail]');if(label)label.textContent=v.label;if(detail)detail.textContent=v.detail;el.onclick=cloudSyncState.status==='conflict'?()=>openCloudSyncConflict():null}
 function setCloudSyncState(status,error='',conflict=null){cloudSyncState={status,error:String(error||''),conflict:conflict||null};refreshSyncStatusUi()}
 function scheduleCloudRetry(){
- clearTimeout(cloudSyncRetryTimer);if(!cloudSyncMeta.dirty||!authUser?.id)return;
- const delays=[5000,15000,30000,60000],delay=delays[Math.min(cloudSyncRetryCount++,delays.length-1)];
- cloudSyncRetryTimer=setTimeout(()=>{if(navigator.onLine===false){setCloudSyncState('offline');return scheduleCloudRetry()}syncCloudAccountData(activeDataUserId,{quiet:true})},delay);
+ clearTimeout(cloudSyncRetryTimer);cloudSyncRetryCount=0;
+ // v97 local-first: never retry account_data writes in the background.
 }
 function scheduleCloudAccountSync(){
- if(!cloudDataHydrated||!sb||!authUser?.id||authUser.id!==activeDataUserId)return;
- clearTimeout(cloudSyncTimer);cloudSyncTimer=setTimeout(()=>syncCloudAccountData(activeDataUserId),500);
+ clearTimeout(cloudSyncTimer);
+ // v97 local-first: account_data uploads happen only after an explicit user action.
 }
 function applyRemoteAccountData(remote,{renderAfter=false}={}){
  if(!remote?.payload)return false;
@@ -311,24 +325,12 @@ async function repairCloudWorkoutHistory(){
  const recovered=(data.sessions||[]).length;profile();toast(`Verified ${recovered} workouts · device had ${localBefore}, cloud had ${cloudBefore}.`);
 }
 async function hydrateCloudAccountData(expectedUserId=activeDataUserId){
- if(!sb||!expectedUserId||authUser?.id!==expectedUserId||activeDataUserId!==expectedUserId)return;
- setCloudSyncState('syncing');const {remote,error}=await readCloudAccountData(expectedUserId);
- if(authUser?.id!==expectedUserId||activeDataUserId!==expectedUserId)return;
- if(error){console.error('load account data',error);cloudDataHydrated=true;setCloudSyncState(navigator.onLine===false?'offline':'failed',error.message);scheduleCloudRetry();return}
- const remoteTime=remoteAccountUpdatedAt(remote),remoteHasContent=hasAccountContent(remote?.payload),localHasContent=hasAccountContent();
- if(remote?.payload&&!historyRecoveryDone(expectedUserId)&&localRecoveryAddsCloudData(remote.payload,data)){
-  data=buildRecoveryPayload(remote.payload,data);normalizeLocalData();persistLocalAccountData();cloudDataHydrated=true;
-  cloudSyncMeta={...cloudSyncMeta,dirty:true,lastRemoteUpdatedAt:remoteTime,lastSyncedHash:syncContentHash(remote.payload),lastLocalHash:syncContentHash(data),lastRemoteSessionCount:(remote.payload.sessions||[]).length};persistSyncMeta();markHistoryRecoveryDone(expectedUserId);setCloudSyncState('syncing');scheduleCloudAccountSync();return;
- }
- markHistoryRecoveryDone(expectedUserId);
- if(remoteHasContent){
-  if(cloudSyncMeta.dirty&&cloudSyncMeta.lastRemoteUpdatedAt&&remoteTime>cloudSyncMeta.lastRemoteUpdatedAt){cloudDataHydrated=true;setCloudSyncState('conflict','',remote);return}
-  if(!cloudSyncMeta.dirty||!cloudSyncMeta.lastRemoteUpdatedAt)applyRemoteAccountData(remote);
- }else if(remote?.payload&&!localHasContent){applyRemoteAccountData(remote)}
+ if(!expectedUserId||authUser?.id!==expectedUserId||activeDataUserId!==expectedUserId)return;
+ // v97 local-first: signing in must never replace device data with an account_data row.
  cloudDataHydrated=true;
- if((!remote?.payload||(!remoteHasContent&&localHasContent))&&localHasContent){cloudSyncMeta.dirty=true;cloudSyncMeta.lastRemoteUpdatedAt=remoteTime;cloudSyncMeta.lastSyncedHash=remote?.payload?syncContentHash(remote.payload):'';cloudSyncMeta.lastLocalHash=syncContentHash(data);persistSyncMeta();scheduleCloudAccountSync()}
- else if(cloudSyncMeta.dirty)scheduleCloudAccountSync();
- else{cloudSyncMeta.lastRemoteSessionCount=(remote?.payload?.sessions||[]).length;persistSyncMeta();setCloudSyncState('synced')}
+ cloudSyncMeta.lastLocalHash=syncContentHash(data);
+ persistSyncMeta();
+ setCloudSyncState('local');
 }
 function openCloudSyncConflict(remote=cloudSyncState.conflict){
  if(!remote?.payload)return toast('Cloud conflict details are no longer available. Try again.');
@@ -337,13 +339,9 @@ function openCloudSyncConflict(remote=cloudSyncState.conflict){
  $('#sync-use-cloud').onclick=()=>{applyRemoteAccountData(remote);closeSheet();render();toast('Cloud version loaded safely.')};
  $('#sync-keep-device').onclick=async()=>{if(!confirm('Replace the newer cloud copy with this device?'))return;const btn=$('#sync-keep-device');btn.disabled=true;btn.textContent='VERIFYING…';cloudSyncMeta.dirty=true;persistSyncMeta();const result=await syncCloudAccountData(activeDataUserId,{force:true});if(result?.error){btn.disabled=false;btn.textContent='KEEP THIS DEVICE';return}closeSheet();render();toast('This device is now the verified cloud copy.')};
 }
-async function refreshCloudAccountData({renderAfter=true,quiet=true}={}){
- if(!cloudDataHydrated||!sb||!authUser?.id||activeDataUserId!==authUser.id||data.activeSession||navigator.onLine===false)return;
- const expectedUserId=authUser.id,{remote,error}=await readCloudAccountData(expectedUserId);if(error){setCloudSyncState('failed',error.message);scheduleCloudRetry();return}
- if(authUser?.id!==expectedUserId||activeDataUserId!==expectedUserId||!remote?.payload)return;
- const remoteTime=remoteAccountUpdatedAt(remote);if(remoteTime<=cloudSyncMeta.lastRemoteUpdatedAt)return;
- if(cloudSyncMeta.dirty){setCloudSyncState('conflict','',remote);if(!quiet)toast('Newer data exists on another device. Review sync in Profile.');return}
- applyRemoteAccountData(remote,{renderAfter});if(!quiet)toast('New cloud data loaded.');
+async function refreshCloudAccountData(){
+ // v97 local-first: intentionally disabled. Safari focus/visibility must never pull account_data.
+ return {skipped:true,reason:'manual-only'};
 }
 let data=structuredClone(defaults), route='home', routeArgs={}, entryUnlocked=false;normalizeLocalData();
 function activityFactor(sex,level){const table={sedentary:1.20,low:1.375,active:1.55,very:1.725};return table[level]||1.55}
@@ -370,8 +368,10 @@ function save(){
  if(!activeDataUserId||!authUser||authUser.id!==activeDataUserId)return false;
  syncPlannedWorkoutReferences();
  const nextHash=syncContentHash(data),contentChanged=nextHash!==cloudSyncMeta.lastLocalHash;
- if(contentChanged){data.updatedAt=Date.now();cloudSyncMeta.dirty=true;cloudSyncMeta.lastLocalHash=nextHash;persistSyncMeta();if(navigator.onLine===false)setCloudSyncState('offline');else setCloudSyncState('syncing')}
- const saved=persistLocalAccountData();if(saved&&cloudSyncMeta.dirty)scheduleCloudAccountSync();return saved
+ if(contentChanged){
+  data.updatedAt=Date.now();cloudSyncMeta.dirty=true;cloudSyncMeta.lastLocalHash=syncContentHash(data);persistSyncMeta();setCloudSyncState('local');
+ }
+ return persistLocalAccountData();
 }
 function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.remove('show'),2200)}
 function escapeHtml(v=''){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
@@ -2995,7 +2995,7 @@ function profile(){
  const goalLabel=data.profile.goal==='gain'?'Build muscle':data.profile.goal==='lose'?'Lose weight':'Maintain';
  const weight=Number(data.profile.weight||0),syncView=syncStatusView();
  shell(`${header()}<h1 class="page-title">Profile</h1><section class="section profile-personal-section"><article class="card social-profile-hero own profile-personal-hero">${avatarMarkup(p,'xl')}<div class="social-profile-copy"><p class="eyebrow profile-kicker">YOUR PROFILE</p><h2>${escapeHtml(p.display_name||data.profile.name)}</h2><p>${p.username?`@${escapeHtml(p.username)}`:'Choose a username'}${p.selected_title?` · ${escapeHtml(p.selected_title)}`:''}</p>${p.bio?`<span>${escapeHtml(p.bio)}</span>`:'<span class="subtle">Add a bio, profile photo and title.</span>'}</div><button class="icon-btn social-edit-btn" id="edit-social-profile">EDIT</button></article><div class="profile-personal-stats"><div><span>WEIGHT</span><strong>${weight?`${weight.toFixed(1)} kg`:'—'}</strong></div><div><span>GOAL</span><strong>${escapeHtml(goalLabel)}</strong></div><div><span>WORKOUTS</span><strong>${(data.sessions||[]).length}</strong></div><div><span>STREAK</span><strong>${calcStreak()} days</strong></div></div><button class="secondary profile-body-btn" id="edit-body-profile">BODY & GOAL</button></section><section class="section"><p class="eyebrow">Settings</p><article class="card" style="padding:0 14px"><button class="settings-row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;text-align:left" id="privacy-settings"><span>Privacy & sharing</span><small>Who sees what ›</small></button><button class="settings-row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;text-align:left" id="notification-settings"><span>Notifications</span><small>GAYM sass ›</small></button><button class="settings-row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;text-align:left" id="pride-mode-settings"><span>Pride Mode</span><small>${data.prideMode==='on'?'ON':data.prideMode==='off'?'OFF':'AUTO'} ›</small></button>${hasLegacyLocalData()?`<button class="settings-row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;text-align:left" id="import-legacy-data"><span>Import pre-account data</span><small>ONE TIME ›</small></button>`:''}<button class="settings-row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;text-align:left" id="export-data"><span>Export local data</span><small>JSON ›</small></button><button class="settings-row danger-text" style="width:100%;background:none;border:0;text-align:left" id="sign-out"><span>Log out</span><small>›</small></button></article></section>`);
- const settings=$('#privacy-settings')?.parentElement;if(settings){settings.insertAdjacentHTML('afterbegin',`<div class="account-sync-status ${syncView.cls}" id="account-sync-status"><i></i><span><strong>ACCOUNT SYNC</strong><small data-sync-detail>${escapeHtml(syncView.detail)}</small></span><b data-sync-label>${escapeHtml(syncView.label)}</b></div><button class="settings-row account-sync-row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;text-align:left" id="account-sync-now"><span>Sync this device<small>Upload and verify changes</small></span><small>SYNC NOW</small></button><button class="settings-row account-sync-row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;text-align:left" id="account-repair-history"><span>Recover workout history<small>Merge this device with the cloud · deletes nothing</small></span><small>REPAIR</small></button><button class="settings-row account-sync-row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;text-align:left" id="account-load-now"><span>Restore account data<small>Replace this device with the cloud copy</small></span><small>LOAD CLOUD</small></button>`);$('#account-sync-now').onclick=forceCloudAccountSync;$('#account-repair-history').onclick=repairCloudWorkoutHistory;$('#account-load-now').onclick=forceCloudAccountLoad;if(cloudSyncState.status==='conflict')$('#account-sync-status').onclick=()=>openCloudSyncConflict()}$('#edit-social-profile').onclick=openSocialProfileEditor;$('#edit-body-profile').onclick=openProfileSheet;$('#privacy-settings').onclick=openPrivacySettings;$('#notification-settings').onclick=openNotificationSettings;$('#pride-mode-settings').onclick=openPrideModeSettings;const importLegacy=$('#import-legacy-data');if(importLegacy)importLegacy.onclick=importLegacyLocalData;$('#export-data').onclick=exportData;$('#sign-out').onclick=signOutCloud;
+ const settings=$('#privacy-settings')?.parentElement;if(settings){settings.insertAdjacentHTML('afterbegin',`<div class="account-sync-status ${syncView.cls}" id="account-sync-status"><i></i><span><strong>ACCOUNT DATA</strong><small data-sync-detail>${escapeHtml(syncView.detail)}</small></span><b data-sync-label>${escapeHtml(syncView.label)}</b></div><button class="settings-row account-sync-row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;text-align:left" id="account-sync-now"><span>Back up this device<small>Manual upload only · never automatic</small></span><small>BACK UP</small></button><button class="settings-row account-sync-row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;text-align:left" id="account-repair-history"><span>Recover workout history<small>Merge this device with the cloud · deletes nothing</small></span><small>REPAIR</small></button><button class="settings-row account-sync-row" style="width:100%;background:none;border-left:0;border-right:0;border-top:0;color:inherit;text-align:left" id="account-load-now"><span>Restore from cloud<small>Manual only · replaces this device after confirmation</small></span><small>RESTORE</small></button>`);$('#account-sync-now').onclick=forceCloudAccountSync;$('#account-repair-history').onclick=repairCloudWorkoutHistory;$('#account-load-now').onclick=forceCloudAccountLoad;if(cloudSyncState.status==='conflict')$('#account-sync-status').onclick=()=>openCloudSyncConflict()}$('#edit-social-profile').onclick=openSocialProfileEditor;$('#edit-body-profile').onclick=openProfileSheet;$('#privacy-settings').onclick=openPrivacySettings;$('#notification-settings').onclick=openNotificationSettings;$('#pride-mode-settings').onclick=openPrideModeSettings;const importLegacy=$('#import-legacy-data');if(importLegacy)importLegacy.onclick=importLegacyLocalData;$('#export-data').onclick=exportData;$('#sign-out').onclick=signOutCloud;
 }
 function renderSocialTab(){
  const box=$('#social-tab-content');if(!box)return;const fc=$('#social-friend-count');if(fc)fc.textContent=String(socialCache.friends.length);
@@ -3052,8 +3052,8 @@ function closeSheet(){
 
 let socialNotificationPoll=null,accountSyncPoll=null;
 function startSocialNotificationPolling(){if(socialNotificationPoll)clearInterval(socialNotificationPoll);socialNotificationPoll=setInterval(()=>{if(authUser&&activeDataUserId===authUser.id)loadSocialNotifications(authUser.id)},30000)}
-function startAccountSyncPolling(){if(accountSyncPoll)clearInterval(accountSyncPoll);accountSyncPoll=setInterval(()=>{if(authUser&&activeDataUserId===authUser.id&&document.visibilityState==='visible')refreshCloudAccountData({renderAfter:route!=='active',quiet:true})},30000)}
+function startAccountSyncPolling(){if(accountSyncPoll)clearInterval(accountSyncPoll);accountSyncPoll=null}
 
 function render(){evaluateNotifications();stopWorkoutClock();if(!entryUnlocked)return entry();if(route==='home')home();else if(route==='plan')plan();else if(route==='workout')workout();else if(route==='active')active();else if(route==='progress')progress();else if(route==='nutrition')nutrition();else if(route==='social')social();else if(route==='chat')chatPage();else if(route==='profile')profile();else home();}
-migrateProfile();if('scrollRestoration'in history)history.scrollRestoration='manual';window.addEventListener('beforeunload',persistActiveSession);window.addEventListener('pagehide',persistActiveSession);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistActiveSession();else{if(route==='active'&&data.activeSession)render();refreshCloudAccountData({renderAfter:route!=='active',quiet:true})}});window.addEventListener('focus',()=>refreshCloudAccountData({renderAfter:route!=='active',quiet:true}));window.addEventListener('offline',()=>{if(authUser)setCloudSyncState('offline')});window.addEventListener('online',()=>{if(!authUser)return;setCloudSyncState('syncing');refreshCloudAccountData({renderAfter:route!=='active',quiet:true}).finally(()=>{if(cloudSyncMeta.dirty)scheduleCloudAccountSync()})});if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=96-history-recovery',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));render();initializeCloud();
+migrateProfile();if('scrollRestoration'in history)history.scrollRestoration='manual';window.addEventListener('beforeunload',persistActiveSession);window.addEventListener('pagehide',persistActiveSession);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistActiveSession();else if(route==='active'&&data.activeSession)render()});window.addEventListener('offline',()=>{if(authUser)setCloudSyncState('local')});window.addEventListener('online',()=>{if(authUser)setCloudSyncState('local')});if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=97-local-first',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));render();initializeCloud();
 })();
