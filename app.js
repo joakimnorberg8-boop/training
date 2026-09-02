@@ -1,6 +1,6 @@
 (()=>{
 'use strict';
-// GAYM v96 HISTORY RECOVERY: verified cross-device sync plus non-destructive workout recovery.
+// GAYM v98 LOCAL-FIRST: destructive account auto-sync disabled; nutrition uses safe merge sync.
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 
 const SUPABASE_URL='https://dkiejeckkwzowpkxapbc.supabase.co';
@@ -15,6 +15,7 @@ let socialCache={friends:[],requests:[],feed:[],nightOuts:[],sharedRecipes:[],no
 let socialCacheUpdatedAt=0,socialLoadPromise=null;
 const SOCIAL_CACHE_TTL=15000;
 let activeDataUserId=null,authEpoch=0,cloudDataHydrated=false,cloudSyncTimer=null,cloudSyncRetryTimer=null,cloudSyncRetryCount=0;
+let nutritionSyncTimer=null,nutritionSyncBusy=false,nutritionSyncLastHash='';
 const AUTO_ACCOUNT_SYNC=false; // v97 local-first: account_data is manual only
 let cloudSyncMeta={dirty:false,lastRemoteUpdatedAt:0,lastSyncedAt:0,lastLocalHash:'',lastSyncedHash:'',lastRemoteSessionCount:0};
 let cloudSyncState={status:'idle',error:'',conflict:null};
@@ -22,7 +23,7 @@ let cloudSyncState={status:'idle',error:'',conflict:null};
 const icons={home:'<svg viewBox="0 0 24 24"><path d="M3 10.8 12 3l9 7.8v9.2a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg>',plan:'<svg viewBox="0 0 24 24"><path d="M6 3v3M18 3v3M4 8h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1z"/><path d="M8 12h3M8 16h3M14 12h2M14 16h2"/></svg>',social:'<svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M2.8 20c.5-3.7 2.5-5.5 5.2-5.5s4.7 1.8 5.2 5.5M13.5 15.2c1-.7 2.1-1 3.5-1 2.4 0 4 1.5 4.5 4.8"/></svg>',workout:'<svg viewBox="0 0 24 24"><path d="M6 8v8M18 8v8M3 10v4M21 10v4M6 12h12"/></svg>',progress:'<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',profile:'<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c.8-4 3.5-6 8-6s7.2 2 8 6"/></svg>',bell:'<svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>',plus:'<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>',back:'<svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>',menu:'<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>',dots:'<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none"/></svg>'};
 const defaults={
  profile:{name:'Jocke',weight:70.4,height:183,age:28,sex:'male',activity:'active',goal:'gain',calorieTarget:2910,proteinTarget:140,carbTarget:300,fatTarget:80,autoTargets:true},
- customWorkouts:[],customPrograms:[],sessions:[],measurements:[],nutrition:[],recipeFavorites:[],customRecipes:[],
+ customWorkouts:[],customPrograms:[],sessions:[],measurements:[],nutrition:[],nutritionDeletedIds:[],recipeFavorites:[],customRecipes:[],
  planned:[], activeSession:null, profileCreated:false, sassSeed:null, dailySass:{date:null,text:''},
  notificationSettings:{workout:true,nutrition:true,progress:true,dailySass:true,unhinged:true,dailyTime:'09:00',nutritionTime:'19:00'},
  updatedAt:0,
@@ -181,7 +182,7 @@ function stableStringify(value){
  return `{${Object.keys(value).sort().map(k=>`${JSON.stringify(k)}:${stableStringify(value[k])}`).join(',')}}`;
 }
 function syncContentSnapshot(payload=data){
- const keys=['profile','customWorkouts','customPrograms','sessions','measurements','nutrition','recipeFavorites','customRecipes','planned','activeSession','profileCreated','notificationSettings','coachCheckins','bottomCheckins','nightOut','prideMode','selectedTitle','achievementMeta','beginnerEquipment'];
+ const keys=['profile','customWorkouts','customPrograms','sessions','measurements','nutrition','nutritionDeletedIds','recipeFavorites','customRecipes','planned','activeSession','profileCreated','notificationSettings','coachCheckins','bottomCheckins','nightOut','prideMode','selectedTitle','achievementMeta','beginnerEquipment'];
  return JSON.parse(JSON.stringify(Object.fromEntries(keys.map(k=>[k,payload?.[k]??defaults[k]??null]))));
 }
 function syncContentHash(payload=data){
@@ -227,11 +228,53 @@ function normalizeLocalData(){
  data.dailySass=data.dailySass&&typeof data.dailySass==='object'?data.dailySass:{date:null,text:''};
  data.unicornBrain=data.unicornBrain&&typeof data.unicornBrain==='object'?data.unicornBrain:{date:null,slot:null,topic:null,recent:[]};
  data.unicornBrain.recent=Array.isArray(data.unicornBrain.recent)?data.unicornBrain.recent.slice(-4):[];
- data.customRecipes=Array.isArray(data.customRecipes)?data.customRecipes:[];data.recipeFavorites=Array.isArray(data.recipeFavorites)?data.recipeFavorites:[];data.notifications=Array.isArray(data.notifications)?data.notifications:[];data.bottomCheckins=Array.isArray(data.bottomCheckins)?data.bottomCheckins:[];
+ data.customRecipes=Array.isArray(data.customRecipes)?data.customRecipes:[];data.recipeFavorites=Array.isArray(data.recipeFavorites)?data.recipeFavorites:[];data.nutritionDeletedIds=Array.isArray(data.nutritionDeletedIds)?[...new Set(data.nutritionDeletedIds.map(String))]:[];data.notifications=Array.isArray(data.notifications)?data.notifications:[];data.bottomCheckins=Array.isArray(data.bottomCheckins)?data.bottomCheckins:[];
  data.notificationMeta=Object.assign({dailySassDate:null,nutritionDate:null,absenceDate:null,streakMilestone:null},data.notificationMeta||{});
  recomputePRHistory({notifyNew:false});syncPlannedWorkoutReferences();
 }
-function switchAccountLocalData(userId){activeDataUserId=userId||null;data=loadForUser(activeDataUserId);normalizeLocalData();cloudSyncMeta=loadSyncMeta(activeDataUserId);cloudSyncMeta.lastLocalHash=syncContentHash(data);persistSyncMeta()}
+function switchAccountLocalData(userId){activeDataUserId=userId||null;data=loadForUser(activeDataUserId);normalizeLocalData();cloudSyncMeta=loadSyncMeta(activeDataUserId);cloudSyncMeta.lastLocalHash=syncContentHash(data);nutritionSyncLastHash=nutritionSyncHash();persistSyncMeta()}
+function nutritionSyncHash(payload=data){
+ const snap={nutrition:Array.isArray(payload?.nutrition)?payload.nutrition:[],nutritionDeletedIds:Array.isArray(payload?.nutritionDeletedIds)?payload.nutritionDeletedIds:[]};
+ return stableStringify(snap);
+}
+function nutritionItemKey(item,index=0){return item?.id!=null&&item.id!==''?String(item.id):`legacy:${item?.date||''}:${item?.name||''}:${item?.kcal||0}:${index}`}
+function mergeNutritionSync(remotePayload,localPayload=data){
+ const remote=remotePayload&&typeof remotePayload==='object'?remotePayload:{},local=localPayload&&typeof localPayload==='object'?localPayload:{};
+ const deleted=new Set([...(remote.nutritionDeletedIds||[]),...(local.nutritionDeletedIds||[])].map(String));
+ const merged=[],positions=new Map();
+ for(const [items,preferLocal] of [[Array.isArray(remote.nutrition)?remote.nutrition:[],false],[Array.isArray(local.nutrition)?local.nutrition:[],true]]){
+  items.forEach((item,index)=>{const key=nutritionItemKey(item,index);if(deleted.has(key)||deleted.has(String(item?.id||'')))return;const copy=structuredClone(item),pos=positions.get(key);if(pos==null){positions.set(key,merged.length);merged.push(copy)}else if(preferLocal)merged[pos]={...merged[pos],...copy}});
+ }
+ return {nutrition:merged,nutritionDeletedIds:[...deleted].slice(-1000)};
+}
+function markNutritionDeleted(items){
+ const ids=(Array.isArray(items)?items:[]).map(x=>x?.id).filter(Boolean).map(String);if(!ids.length)return;
+ data.nutritionDeletedIds=[...new Set([...(data.nutritionDeletedIds||[]).map(String),...ids])].slice(-1000);
+}
+function removeNutritionWhere(predicate){
+ const before=(data.nutrition||[]),removed=before.filter(predicate);if(!removed.length)return false;markNutritionDeleted(removed);data.nutrition=before.filter(x=>!predicate(x));return true;
+}
+function scheduleNutritionCloudSync(delay=500){
+ if(!sb||!authUser?.id||activeDataUserId!==authUser.id)return;
+ clearTimeout(nutritionSyncTimer);nutritionSyncTimer=setTimeout(()=>syncNutritionCloud(authUser.id,{quiet:true}),delay);
+}
+async function syncNutritionCloud(expectedUserId=activeDataUserId,{quiet=false,pullOnly=false}={}){
+ if(nutritionSyncBusy||!sb||!expectedUserId||authUser?.id!==expectedUserId||activeDataUserId!==expectedUserId)return {skipped:true};
+ nutritionSyncBusy=true;
+ try{
+  const {remote,error}=await readCloudAccountData(expectedUserId);if(error)throw error;
+  if(authUser?.id!==expectedUserId||activeDataUserId!==expectedUserId)return {skipped:true};
+  const merged=mergeNutritionSync(remote?.payload,data),before=nutritionSyncHash(data);
+  data.nutrition=merged.nutrition;data.nutritionDeletedIds=merged.nutritionDeletedIds;normalizeLocalData();persistLocalAccountData();nutritionSyncLastHash=nutritionSyncHash(data);
+  if(pullOnly)return {ok:true,pulled:true};
+  const remotePayload=remote?.payload&&typeof remote.payload==='object'?remote.payload:{};
+  const remoteMerged=mergeNutritionSync(remotePayload,data);
+  const nextPayload={...remotePayload,nutrition:remoteMerged.nutrition,nutritionDeletedIds:remoteMerged.nutritionDeletedIds,updatedAt:Math.max(Number(remotePayload.updatedAt)||0,Date.now())};
+  const {error:upError}=await sb.from('account_data').upsert({user_id:expectedUserId,payload:nextPayload,updated_at:new Date().toISOString()},{onConflict:'user_id'});if(upError)throw upError;
+  nutritionSyncLastHash=nutritionSyncHash(data);return {ok:true,changed:before!==nutritionSyncLastHash};
+ }catch(e){console.error('nutrition cloud sync',e);if(!quiet)toast(`Nutrition sync failed: ${e.message||e}`);return {error:e}}
+ finally{nutritionSyncBusy=false}
+}
 function accountDataUpdatedAt(payload=data){return Math.max(0,Number(payload?.updatedAt)||0)}
 function remoteAccountUpdatedAt(remote){return Math.max(0,new Date(remote?.updated_at||0).getTime()||0)}
 function hasAccountContent(payload=data){return ['customWorkouts','customPrograms','sessions','measurements','nutrition','recipeFavorites','customRecipes','planned','bottomCheckins'].some(key=>Array.isArray(payload?.[key])&&payload[key].length)}
@@ -326,9 +369,12 @@ async function repairCloudWorkoutHistory(){
 }
 async function hydrateCloudAccountData(expectedUserId=activeDataUserId){
  if(!expectedUserId||authUser?.id!==expectedUserId||activeDataUserId!==expectedUserId)return;
- // v97 local-first: signing in must never replace device data with an account_data row.
+ // v98 local-first: NEVER hydrate the whole account payload. Only nutrition is merged by item ID/tombstone.
+ await syncNutritionCloud(expectedUserId,{quiet:true});
+ if(authUser?.id!==expectedUserId||activeDataUserId!==expectedUserId)return;
  cloudDataHydrated=true;
  cloudSyncMeta.lastLocalHash=syncContentHash(data);
+ nutritionSyncLastHash=nutritionSyncHash(data);
  persistSyncMeta();
  setCloudSyncState('local');
 }
@@ -368,10 +414,13 @@ function save(){
  if(!activeDataUserId||!authUser||authUser.id!==activeDataUserId)return false;
  syncPlannedWorkoutReferences();
  const nextHash=syncContentHash(data),contentChanged=nextHash!==cloudSyncMeta.lastLocalHash;
+ const nextNutritionHash=nutritionSyncHash(data),nutritionChanged=nextNutritionHash!==nutritionSyncLastHash;
  if(contentChanged){
   data.updatedAt=Date.now();cloudSyncMeta.dirty=true;cloudSyncMeta.lastLocalHash=syncContentHash(data);persistSyncMeta();setCloudSyncState('local');
  }
- return persistLocalAccountData();
+ const saved=persistLocalAccountData();
+ if(saved&&nutritionChanged){nutritionSyncLastHash=nextNutritionHash;scheduleNutritionCloudSync()}
+ return saved;
 }
 function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.remove('show'),2200)}
 function escapeHtml(v=''){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
@@ -2085,7 +2134,7 @@ function nightEstimatePreset(level){
  return presets[level]||null;
 }
 function removeNightEstimate(date){
- data.nutrition=(data.nutrition||[]).filter(n=>!(n.date===date&&n.alcohol===true&&n.drinkPresetId==='night-estimate'));
+ removeNutritionWhere(n=>n.date===date&&n.alcohol===true&&n.drinkPresetId==='night-estimate');
 }
 function saveNightEstimate(level,date){
  const p=nightEstimatePreset(level);if(!p)return;
@@ -2166,7 +2215,7 @@ function logNightOutDrink(drink,quantity=1,date=isoToday()){
  data.nutrition.push({id:uid(),date,name:drink.name,kcal:+(drink.kcal*qty).toFixed(1),protein:+((drink.protein||0)*qty).toFixed(1),carbs:+((drink.carbs||0)*qty).toFixed(1),fat:+((drink.fat||0)*qty).toFixed(1),fiber:0,fiberProvided:false,alcohol:true,alcoholUnits:+(drink.units*qty).toFixed(1),alcoholGrams:+alcoholGrams.toFixed(1),drinkPresetId:drink.id,drinkMl:drink.ml*qty,drinkAbv:drink.abv,caffeineMg:(drink.caffeineMg||0)*qty,quantity:qty});
  save();
 }
-function undoNightOutDrink(id,date=isoToday()){const before=data.nutrition.length;data.nutrition=data.nutrition.filter(n=>n.id!==id);if(data.nutrition.length!==before){save();refreshUnderlyingView();openNightOut(date);toast('Drink removed')}}
+function undoNightOutDrink(id,date=isoToday()){if(removeNutritionWhere(n=>String(n.id)===String(id))){save();refreshUnderlyingView();openNightOut(date);toast('Drink removed')}}
 function openNightOut(date=isoToday()){
  const today=alcoholSummary(date),groups=[...new Set(NIGHT_OUT_DRINKS.map(x=>x.group))];
  const logged=today.items.length?`<div class="night-out-tally"><div><span>TONIGHT</span><strong>${today.count} drink${today.count===1?'':'s'}</strong></div><div><span>ALCOHOL</span><strong>~${today.units.toFixed(1)} units</strong></div><div><span>CALORIES</span><strong>~${Math.round(today.kcal)} kcal</strong></div></div><div class="night-out-logged">${today.items.map(n=>`<div><span><strong>${escapeHtml(n.name)}</strong><small>~${Number(n.alcoholUnits||0).toFixed(1)} unit · ${Math.round(Number(n.kcal)||0)} kcal</small></span><button class="text-btn" data-remove-drink="${n.id}">REMOVE</button></div>`).join('')}</div>`:'';
@@ -2568,7 +2617,7 @@ function nutrition(){
   bindNutritionTabs();$('#recipe-search').oninput=e=>{recipeQuery=e.target.value;nutrition()};$$('[data-rcat]').forEach(b=>b.onclick=()=>{recipeCategory=b.dataset.rcat;nutrition()});$$('[data-rview]').forEach(b=>b.onclick=()=>{recipeLibraryView=b.dataset.rview;recipeCategory='All';recipeQuery='';nutrition()});$('#create-recipe').onclick=()=>openRecipeBuilder();bindRecipeCards();hydrateRecipeImages();renderNutritionCloudAsync();return;
  }
  shell(`${header()}<h1 class="page-title">Nutrition</h1>${tabs}<p class="subtle">Daily targets adapt to your goal: <strong style="color:var(--text)">${goalLabel(data.profile.goal)}</strong>.</p><section class="section"><article class="card" style="padding:18px"><div class="food-ring" style="--p:${perc}"><div><strong>${Math.round(k).toLocaleString()}</strong><small>/ ${data.profile.calorieTarget.toLocaleString()} kcal</small></div></div>${macro('Protein',p,data.profile.proteinTarget,'g','cyan')}${macro('Carbs',c,data.profile.carbTarget,'g','yellow')}${macro('Fat',fat,data.profile.fatTarget,'g','orange')}${macro('Fiber',fiber,ft,'g','lime')}</article></section><section class="section"><div class="section-head"><h2>Today's meals</h2><button class="text-btn" id="add-food">+ ADD</button></div><div class="list">${f.length?f.map(n=>`<div class="list-card"><span class="badge-icon cardio">F</span><span class="grow"><h3>${escapeHtml(n.name)}</h3><p>${n.kcal} kcal · ${n.protein||0} g protein${n.fiber?` · ${n.fiber} g fiber`:''}</p></span><button class="small-btn danger" data-food-remove="${n.id}">REMOVE</button></div>`).join(''):`<div class="empty"><strong>No food logged today</strong>Add a meal or pick a recipe.</div>`}</div></section><section class="section"><div class="section-head"><h2>Recipes for your goal</h2><button class="text-btn" id="see-recipes">SEE ALL</button></div><div class="quick-recipe-row">${sortedRecipes(allRecipes()).slice(0,3).map(recipeCard).join('')}</div></section>`);
- bindNutritionTabs();$('#add-food').onclick=openFoodSheet;$('#see-recipes').onclick=()=>{nutritionTab='recipes';nutrition()};$$('[data-food-remove]').forEach(b=>b.onclick=()=>{data.nutrition=data.nutrition.filter(n=>n.id!==b.dataset.foodRemove);save();nutrition()});bindRecipeCards();hydrateRecipeImages();
+ bindNutritionTabs();$('#add-food').onclick=openFoodSheet;$('#see-recipes').onclick=()=>{nutritionTab='recipes';nutrition()};$$('[data-food-remove]').forEach(b=>b.onclick=()=>{if(removeNutritionWhere(n=>String(n.id)===String(b.dataset.foodRemove))){save();nutrition()}});bindRecipeCards();hydrateRecipeImages();
 }
 function bindNutritionTabs(){$$('[data-ntab]').forEach(b=>b.onclick=()=>{nutritionTab=b.dataset.ntab;nutrition()})}
 function bindRecipeCards(){$$('[data-recipe]').forEach(b=>b.onclick=()=>openRecipe(b.dataset.recipe));$$('[data-recipe-fav]').forEach(b=>b.onclick=e=>{e.stopPropagation();toggleRecipeFavorite(b.dataset.recipeFav);nutrition()})}
@@ -2663,7 +2712,7 @@ async function hydrateCloudProfile(expectedUserId=authUser?.id){
 async function enterAuthenticatedAccount(user){
  if(!user?.id)return;
  const token=++authEpoch,userId=user.id;
- clearTimeout(cloudSyncTimer);clearTimeout(cloudSyncRetryTimer);cloudSyncRetryCount=0;setCloudSyncState('idle');authUser=user;entryUnlocked=false;cloudDataHydrated=false;cloudProfile=cachedCloudProfile(userId);socialTab='activity';activityPostCache.clear();socialCache={friends:[],requests:[],feed:[],nightOuts:[],sharedRecipes:[],notifications:[]};socialCacheUpdatedAt=0;socialLoadPromise=null;resetRecipeCloudState();
+ clearTimeout(cloudSyncTimer);clearTimeout(cloudSyncRetryTimer);clearTimeout(nutritionSyncTimer);cloudSyncRetryCount=0;setCloudSyncState('idle');authUser=user;entryUnlocked=false;cloudDataHydrated=false;cloudProfile=cachedCloudProfile(userId);socialTab='activity';activityPostCache.clear();socialCache={friends:[],requests:[],feed:[],nightOuts:[],sharedRecipes:[],notifications:[]};socialCacheUpdatedAt=0;socialLoadPromise=null;resetRecipeCloudState();
  switchAccountLocalData(userId);
  await hydrateCloudProfile(userId);
  await hydrateCloudAccountData(userId);
@@ -2672,7 +2721,7 @@ async function enterAuthenticatedAccount(user){
  await Promise.all([syncRecentActivitiesFromLocal(userId),loadSocialNotifications(userId)]);
 }
 function leaveAuthenticatedAccount(){
- ++authEpoch;clearTimeout(cloudSyncTimer);clearTimeout(cloudSyncRetryTimer);cloudSyncRetryCount=0;cloudDataHydrated=false;authUser=null;activeDataUserId=null;cloudProfile=null;cloudSyncMeta={dirty:false,lastRemoteUpdatedAt:0,lastSyncedAt:0,lastLocalHash:'',lastSyncedHash:'',lastRemoteSessionCount:0};setCloudSyncState('idle');activityPostCache.clear();socialTab='activity';data=structuredClone(defaults);normalizeLocalData();entryUnlocked=false;socialCache={friends:[],requests:[],feed:[],nightOuts:[],sharedRecipes:[],notifications:[]};socialCacheUpdatedAt=0;socialLoadPromise=null;resetRecipeCloudState();route='home';routeArgs={};
+ ++authEpoch;clearTimeout(cloudSyncTimer);clearTimeout(cloudSyncRetryTimer);clearTimeout(nutritionSyncTimer);cloudSyncRetryCount=0;cloudDataHydrated=false;authUser=null;activeDataUserId=null;cloudProfile=null;cloudSyncMeta={dirty:false,lastRemoteUpdatedAt:0,lastSyncedAt:0,lastLocalHash:'',lastSyncedHash:'',lastRemoteSessionCount:0};setCloudSyncState('idle');activityPostCache.clear();socialTab='activity';data=structuredClone(defaults);normalizeLocalData();entryUnlocked=false;socialCache={friends:[],requests:[],feed:[],nightOuts:[],sharedRecipes:[],notifications:[]};socialCacheUpdatedAt=0;socialLoadPromise=null;resetRecipeCloudState();route='home';routeArgs={};
 }
 async function initializeCloud(){
  if(!sb){cloudBooting=false;render();return}
