@@ -1985,20 +1985,91 @@ function lastMuscleLoad(group){
  }).find(Boolean)||null;
 }
 function latestCoachCheckin(){return (data.coachCheckins||[]).filter(x=>x.date===isoToday()).at(-1)||null}
-function getCoachInsight(){
- const muscles=coachTargetMuscles();
- if(!muscles.length)return {status:'ready',headline:'Nothing urgent today.',reason:'No strength workout is waiting for a recovery decision.',details:[]};
- const loads=muscles.map(lastMuscleLoad).filter(Boolean).sort((a,b)=>a.days-b.days),recent=loads[0]||null,check=latestCoachCheckin();
- let status='ready',headline='You’re good to train.',reason=recent?`${recent.session.name} touched this area ${recent.days===0?'today':recent.days===1?'yesterday':`${recent.days} days ago`}.`:'No recent session for these muscles.',details=[];
- if(recent){details.push(`${recent.sets} completed sets in the most recent matching session.`);details.push(`Last matching load: ${recent.days===0?'today':recent.days===1?'1 day ago':`${recent.days} days ago`}.`)}
- if(recent&&recent.days===0){status='recovery';headline='Consider recovery or a lighter session.';reason='You already trained part of this muscle group today.'}
- else if(recent&&recent.days===1&&recent.sets>=10){status='caution';headline='Train, but keep an eye on recovery.';reason=`You trained this area yesterday with ${recent.sets} completed sets.`}
- else if(recent&&recent.days===1){status='caution';headline='Probably trainable, but not fully fresh.';reason='This area was trained yesterday.'}
- if(check){details.push(`Today’s check-in: ${check.feeling} · soreness ${check.soreness}.`);if(check.feeling==='rough'||check.soreness==='a lot'){status='recovery';headline='A recovery day is worth considering.';reason='Your own check-in suggests fatigue or substantial soreness.'}else if(status==='ready'&&(check.feeling==='normal'&&check.soreness==='some')){status='caution';headline='Train as planned, but adjust if performance feels off.';reason='Your check-in reports some soreness.'}}
- const alcohol=recentAlcoholContext();if(alcohol.yday.units>=4){details.push(`Yesterday: about ${alcohol.yday.units.toFixed(1)} alcohol units logged.`);if(status==='ready'){status='caution';headline='Train if you feel okay, but recovery may be a little worse.';reason='A higher amount of alcohol was logged yesterday, which can affect sleep and recovery.'}}else if(alcohol.yday.units>=2){details.push(`Yesterday: about ${alcohol.yday.units.toFixed(1)} alcohol units logged.`);if(status==='ready')reason+=' You also logged drinks yesterday, so judge today by how you actually feel.'}
- return {status,headline,reason,details,muscles};
+const COACH_EVIDENCE={
+ training:'ACSM 2026 resistance-training position stand: consistency first; multiple sets; for hypertrophy, ~10 weekly sets per muscle is a useful evidence-based reference, not a magic minimum or ceiling.',
+ protein:'Morton et al. 2018 meta-analysis: gains from extra protein plateaued around ~1.6 g/kg/day on average. Sports-nutrition reviews commonly use ~1.6–2.2 g/kg/day as a practical muscle-gain range.',
+ gain:'Iraki et al. 2019 review: a modest surplus and roughly 0.25–0.5% body-weight gain/week is a practical off-season target for novice/intermediate physique athletes; advanced lifters should generally be more conservative.',
+ loss:'Evidence-based physique-athlete reviews generally favour gradual loss, roughly 0.5–1.0% body weight/week, with slower loss often preferred when already lean to better preserve lean mass.',
+ effort:'2024 proximity-to-failure meta-regression: hypertrophy tends to improve as sets are taken closer to failure, but failure on every set is not required and the app cannot infer RIR unless you log it.'
+};
+function coachDateMs(key){const t=new Date(`${key}T12:00:00`).getTime();return Number.isFinite(t)?t:0}
+function coachDayNutrition(date){
+ const foods=(data.nutrition||[]).filter(n=>n.date===date);
+ return {date,logged:foods.length>0,foods:foods.length,kcal:foods.reduce((a,n)=>a+(+n.kcal||0),0),protein:foods.reduce((a,n)=>a+(+n.protein||0),0),carbs:foods.reduce((a,n)=>a+(+n.carbs||0),0),fat:foods.reduce((a,n)=>a+(+n.fat||0),0),fiber:foods.reduce((a,n)=>a+(+n.fiber||0),0)};
 }
-function coachMarkup(){const c=getCoachInsight();return `<article class="card coach-card ${c.status}"><div class="coach-card-head"><span class="coach-label">GAYM COACH</span><span class="coach-status">${c.status.toUpperCase()}</span></div><strong>${escapeHtml(c.headline)}</strong><p>${escapeHtml(c.reason)}</p><div class="coach-actions"><button class="text-btn coach-why" id="coach-why">WHY?</button></div></article>`}
+function coachNutritionWindow(days=7,{includeToday=false}={}){
+ const rows=[];for(let i=includeToday?0:1;i<=days-(includeToday?1:0);i++)rows.push(coachDayNutrition(dateOffsetKey(i)));
+ const logged=rows.filter(x=>x.logged),sum=(key)=>logged.reduce((a,x)=>a+(Number(x[key])||0),0);
+ return {rows,loggedDays:logged.length,avgKcal:logged.length?sum('kcal')/logged.length:0,avgProtein:logged.length?sum('protein')/logged.length:0,avgCarbs:logged.length?sum('carbs')/logged.length:0,avgFat:logged.length?sum('fat')/logged.length:0,avgFiber:logged.length?sum('fiber')/logged.length:0};
+}
+function coachWeightRate(){
+ const rows=weightHistory().filter(x=>coachDateMs(x.date)>=Date.now()-35*86400000);
+ if(rows.length<3)return {enough:false,reason:'Log at least 3 weigh-ins across 7+ days for a useful weight trend.'};
+ const spanDays=(coachDateMs(rows.at(-1).date)-coachDateMs(rows[0].date))/86400000;
+ if(spanDays<7)return {enough:false,reason:'Weight data covers less than 7 days, so the trend is still too noisy.'};
+ const xs=rows.map(x=>(coachDateMs(x.date)-coachDateMs(rows[0].date))/86400000),ys=rows.map(x=>Number(x.weight));
+ const mx=xs.reduce((a,b)=>a+b,0)/xs.length,my=ys.reduce((a,b)=>a+b,0)/ys.length;
+ const den=xs.reduce((a,x)=>a+(x-mx)**2,0),slope=den?xs.reduce((a,x,i)=>a+(x-mx)*(ys[i]-my),0)/den:0;
+ const kgWeek=slope*7,pctWeek=my>0?kgWeek/my*100:0;
+ return {enough:true,rows:rows.length,spanDays,kgWeek,pctWeek,current:ys.at(-1)};
+}
+function coachRecentMuscleVolume(days=7){
+ const cutoff=Date.now()-(days-1)*86400000,out={};
+ (data.sessions||[]).filter(s=>s.completed!==false&&s.type!=='cardio'&&coachDateMs(s.date)>=cutoff).forEach(s=>(s.items||[]).forEach(item=>{
+  const g=normalizeMuscle(item.muscle);if(!g)return;const sets=(item.sets||[]).filter(z=>z.done!==false).length;out[g]=(out[g]||0)+sets;
+ }));return out;
+}
+function coachNutritionAssessment(){
+ const p=data.profile||{},weight=Math.max(1,Number(p.weight)||70),today=coachDayNutrition(isoToday()),week=coachNutritionWindow(7),proteinFloor=Math.round(weight*1.6),proteinUpper=Math.round(weight*2.2),targetP=Math.max(proteinFloor,Number(p.proteinTarget)||proteinFloor),targetK=Math.max(1,Number(p.calorieTarget)||2000);
+ const details=[];if(week.loggedDays)details.push(`Last 7 completed days: ${week.loggedDays}/7 food-log days · avg ${Math.round(week.avgKcal)} kcal · ${Math.round(week.avgProtein)} g protein.`);else details.push('No completed-day nutrition logs in the last 7 days.');
+ details.push(`Evidence-based protein reference for muscle gain: about ${proteinFloor}–${proteinUpper} g/day at ${weight.toFixed(1)} kg (1.6–2.2 g/kg).`);
+ let flag='neutral',message='Keep logging. The coach needs several complete days before judging your diet trend.';
+ if(week.loggedDays>=3){
+  if(week.avgProtein<proteinFloor*.9){flag='high';message=`Protein has averaged ${Math.round(week.avgProtein)} g on logged days, below the ~${proteinFloor} g evidence-based lower reference.`}
+  else if(week.avgProtein<targetP*.9){flag='medium';message=`Protein is reasonable, but below your app target on average (${Math.round(week.avgProtein)} vs ${Math.round(targetP)} g).`}
+  else message=`Protein trend is on target: about ${Math.round(week.avgProtein)} g/day across logged days.`;
+  const kcalRatio=week.avgKcal/targetK;if(p.goal==='gain'&&kcalRatio<.92){if(flag==='neutral')flag='medium';details.push(`Average logged energy is ${Math.round((1-kcalRatio)*100)}% below your current muscle-gain calorie target.`)}
+  if(p.goal==='lose'&&kcalRatio>1.08){if(flag==='neutral')flag='medium';details.push(`Average logged energy is above your current fat-loss calorie target.`)}
+ }
+ return {today,week,proteinFloor,proteinUpper,targetP,targetK,flag,message,details};
+}
+function coachWeightAssessment(){
+ const goal=data.profile.goal||'maintain',trend=coachWeightRate();if(!trend.enough)return {flag:'neutral',message:trend.reason,details:[trend.reason],trend};
+ const p=trend.pctWeek,abs=Math.abs(p),details=[`Weight trend: ${p>=0?'+':''}${p.toFixed(2)}%/week (${trend.kgWeek>=0?'+':''}${trend.kgWeek.toFixed(2)} kg/week) across ${trend.rows} weigh-ins.`];
+ if(goal==='gain'){
+  if(p<0.1)return {flag:'medium',message:'Your recent weight trend is not moving upward enough to confirm a muscle-gain surplus.',details:[...details,'Practical muscle-gain reference: roughly +0.25 to +0.5% body weight/week; experienced lifters may prefer the lower end.'],trend};
+  if(p>0.65)return {flag:'medium',message:'Your recent gain rate is faster than the conservative muscle-gain range.',details:[...details,'Faster scale gain is not the same thing as faster muscle gain. Consider reviewing average calorie intake if this persists.'],trend};
+  return {flag:'good',message:'Your recent body-weight trend is compatible with a conservative gaining phase.',details:[...details,'Practical gaining reference: about +0.25 to +0.5% body weight/week.'],trend};
+ }
+ if(goal==='lose'){
+  if(p>-0.2)return {flag:'medium',message:'Your recent trend is not showing a clear calorie-deficit response yet.',details:[...details,'Physique-sport reviews commonly use about 0.5–1.0% loss/week, with slower rates often preferable when lean.'],trend};
+  if(p<-1.0)return {flag:'medium',message:'Your recent weight-loss rate is aggressive for preserving lean mass.',details:[...details,'Consider a less aggressive deficit, especially if strength or recovery is dropping.'],trend};
+  return {flag:'good',message:'Your recent weight-loss rate sits in a commonly recommended gradual range.',details,trend};
+ }
+ if(abs<=.25)return {flag:'good',message:'Body weight is roughly stable, which fits a maintenance goal.',details,trend};
+ return {flag:'medium',message:`Body weight is trending ${p>0?'up':'down'} despite a maintenance goal.`,details,trend};
+}
+function coachTrainingAssessment(){
+ const muscles=coachTargetMuscles(),vol=coachRecentMuscleVolume(7),loads=muscles.map(m=>({muscle:m,load:lastMuscleLoad(m),sets:vol[m]||0})),check=latestCoachCheckin(),details=[];
+ if(muscles.length)details.push(`Planned muscles: ${muscles.join(', ')}.`);else details.push('No planned strength workout detected for today.');
+ loads.forEach(x=>details.push(`${x.muscle}: ${x.sets} direct completed sets in the last 7 days${x.load?` · last trained ${x.load.days===0?'today':x.load.days===1?'yesterday':`${x.load.days} days ago`}`:''}.`));
+ if(muscles.length)details.push('For hypertrophy, ~10 weekly sets per muscle is a useful population-level reference, not a mandatory target or hard ceiling.');
+ if(check)details.push(`Today’s check-in: ${check.feeling} · soreness ${check.soreness}.`);
+ if(check&&(check.feeling==='rough'||check.soreness==='a lot'))return {flag:'high',status:'recovery',headline:'Recovery deserves priority today.',message:'Your own check-in reports substantial fatigue or soreness. Reduce the session, change the target muscles, or rest if performance and movement quality are clearly off.',details,muscles,loads};
+ if(loads.some(x=>x.load?.days===0))return {flag:'high',status:'recovery',headline:'Don’t repeat hard work for the same muscles today.',message:'Part of today’s planned muscle group has already been trained today. More volume is not automatically better.',details,muscles,loads};
+ if(loads.some(x=>x.load?.days===1&&x.load.sets>=8))return {flag:'medium',status:'caution',headline:'Trainable, but yesterday was substantial.',message:'You can train consecutive days, but the same muscles had a fairly large direct-set dose yesterday. Use performance, soreness and technique to decide whether to reduce volume.',details,muscles,loads};
+ if(check&&check.soreness==='some')return {flag:'medium',status:'caution',headline:'Train as planned, adjust by performance.',message:'Some soreness alone does not prove you are unrecovered. Warm up, compare performance with normal, and scale back if reps, load or technique are clearly worse.',details,muscles,loads};
+ return {flag:'good',status:'ready',headline:muscles.length?'Training looks reasonable today.':'No recovery warning from your log.',message:muscles.length?'Nothing in your logged training or check-in gives a strong reason to cancel the planned session.':'Choose training based on your plan rather than a made-up readiness score.',details,muscles,loads};
+}
+function getCoachInsight(){
+ const training=coachTrainingAssessment(),nutrition=coachNutritionAssessment(),weight=coachWeightAssessment(),details=[...training.details,...nutrition.details,...weight.details];
+ let status=training.status,headline=training.headline,reason=training.message,topic='TRAINING';
+ if(training.flag!=='high'&&nutrition.flag==='high'){status='caution';headline='Nutrition is the clearest limiter in your log.';reason=nutrition.message;topic='NUTRITION'}
+ else if(training.flag==='good'&&nutrition.flag!=='high'&&weight.flag==='medium'){status='caution';headline='Your weight trend needs a look.';reason=weight.message;topic='PROGRESS'}
+ else if(training.flag==='good'&&nutrition.flag==='medium'){status='caution';headline='Training is fine. Nutrition needs tightening.';reason=nutrition.message;topic='NUTRITION'}
+ return {status,headline,reason,details,muscles:training.muscles,topic,training,nutrition,weight};
+}
+function coachMarkup(){const c=getCoachInsight(),n=c.nutrition,w=c.weight.trend;const evidence=w?.enough?`${w.pctWeek>=0?'+':''}${w.pctWeek.toFixed(2)}%/wk`:'NEED DATA';return `<article class="card coach-card ${c.status}"><div class="coach-card-head"><span class="coach-label">GAYM COACH · ${escapeHtml(c.topic)}</span><span class="coach-status">${c.status.toUpperCase()}</span></div><strong>${escapeHtml(c.headline)}</strong><p>${escapeHtml(c.reason)}</p><div class="coach-mini-grid" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0"><div><small>7D PROTEIN</small><b>${n.week.loggedDays?`${Math.round(n.week.avgProtein)} g`:'—'}</b></div><div><small>WEIGHT TREND</small><b>${escapeHtml(evidence)}</b></div><div><small>FOOD DAYS</small><b>${n.week.loggedDays}/7</b></div></div><div class="coach-actions"><button class="text-btn coach-why" id="coach-why">OPEN COACH</button></div></article>`}
 
 const NIGHT_OUT_PARTY_LINES=[
  "Oh, we're going OUT out. Hydrate, homosexual.",
@@ -2323,9 +2394,26 @@ function openBottomWhy(){
  const fiber=n.fiberCoverage>=1?`${Math.round(n.avgFiber)} g/day avg across ${n.fiberCoverage} day${n.fiberCoverage===1?'':'s'}${n.fiberCoverage>=2?` · ${n.fiberConsistent?'CONSISTENT':'VARIABLE'}`:''}`:'Not enough logged fiber data';
  openSheet(`<div class="sheet-head"><div><p class="eyebrow">Bottom Check</p><h2>Why this result?</h2></div><button class="sheet-close" data-close>×</button></div><p class="subtle">Today’s check-in carries the most weight. Nutrition analysis uses only meals and foods actually present in your log.</p><div class="bottom-why-card"><p class="eyebrow">CURRENT CHECK-IN</p>${r.checks.filter(x=>!x.support).slice(0,4).map(x=>`<div><span>${x.ok?'✓':'!'}</span><strong>${escapeHtml(x.text)}</strong></div>`).join('')}</div><div class="bottom-why-card"><p class="eyebrow">LAST 4 DAYS · LOGGED FOOD ONLY</p><div><span>FIBER</span><strong>${escapeHtml(fiber)}</strong></div><div><span>POSSIBLE GAS TRIGGERS</span><strong>${escapeHtml(gas)}</strong></div><div><span>SPICY FOOD</span><strong>${escapeHtml(spicy)}</strong></div><div><span>ALCOHOL</span><strong>${escapeHtml(alcohol)}</strong></div><div><span>FOOD LOG COVERAGE</span><strong>${n.loggedDays}/4 days</strong></div></div><p class="science-note">Trigger matching understands common English, Swedish and Norwegian ingredient words. Recipe ingredients are analysed only when that recipe was actually logged. A calm stomach and normal bowel movement still outweigh possible food triggers.</p>`);
 }
-function openCoachWhy(){const c=getCoachInsight(),check=latestCoachCheckin();openSheet(`<div class="sheet-head"><div><p class="eyebrow">GAYM Coach</p><h2>Why this recommendation?</h2></div><button class="sheet-close" data-close>×</button></div><p class="subtle">Coach uses your existing workout history plus an optional quick check-in. It is guidance, not a biological recovery percentage.</p><div class="coach-reasons"><div><span>STATUS</span><strong>${c.status.toUpperCase()}</strong></div><p>${escapeHtml(c.reason)}</p>${c.details.map(x=>`<p>• ${escapeHtml(x)}</p>`).join('')}</div><section class="section"><p class="eyebrow">Quick check-in</p><div class="coach-check-grid"><button data-feeling="great" class="small-btn ${check?.feeling==='great'?'active':''}">GREAT</button><button data-feeling="normal" class="small-btn ${check?.feeling==='normal'?'active':''}">NORMAL</button><button data-feeling="rough" class="small-btn ${check?.feeling==='rough'?'active':''}">ROUGH</button></div><div class="coach-check-grid soreness"><button data-soreness="none" class="small-btn ${check?.soreness==='none'?'active':''}">NO SORENESS</button><button data-soreness="some" class="small-btn ${check?.soreness==='some'?'active':''}">SOME</button><button data-soreness="a lot" class="small-btn ${check?.soreness==='a lot'?'active':''}">A LOT</button></div><p class="science-note">Use this only when it adds useful context. You do not need to check in before every workout.</p></section>`);let feeling=check?.feeling||'normal',soreness=check?.soreness||'none';function commit(){data.coachCheckins=(data.coachCheckins||[]).filter(x=>x.date!==isoToday());data.coachCheckins.push({date:isoToday(),feeling,soreness,at:Date.now()});save();openCoachWhy()}$$('[data-feeling]').forEach(b=>b.onclick=()=>{feeling=b.dataset.feeling;commit()});$$('[data-soreness]').forEach(b=>b.onclick=()=>{soreness=b.dataset.soreness;commit()})}
-function weekCoachReview(){const week=thisWeekSessions(),strength=week.filter(s=>s.type!=='cardio'&&s.type!=='group'),cardio=week.filter(s=>s.type==='cardio'),group=week.filter(s=>s.type==='group'),sets=strength.reduce((n,s)=>n+(s.doneSets||0),0),prs=strength.reduce((n,s)=>n+(s.prs?.length||0),0);let win=prs?`${prs} new PB${prs===1?'':'s'} this week.`:strength.length?`${strength.length} strength session${strength.length===1?'':'s'} logged.`:'No strength sessions logged yet.';const muscleCounts={};strength.forEach(s=>(s.items||[]).forEach(x=>{const g=normalizeMuscle(x.muscle);muscleCounts[g]=(muscleCounts[g]||0)+(x.sets||[]).filter(z=>z.done!==false).length}));const entries=Object.entries(muscleCounts).sort((a,b)=>a[1]-b[1]);const watch=entries.length>2?`${entries[0][0]} has the lowest logged volume this week (${entries[0][1]} sets).`:'Keep logging sessions to build a useful balance picture.';return {summary:`${week.length} workouts · ${sets} sets · ${cardio.length} cardio · ${group.length} classes · ${prs} PB${prs===1?'':'s'}`,win,watch,next:entries.length>2?`Keep your strong areas moving and consider whether ${entries[0][0].toLowerCase()} needs attention.`:'Stay consistent and let the trend build.'}}
-function sessionCoachSummary(session){if(session.type==='cardio')return ['Cardio logged. GAYM keeps the result without pretending to replace your watch or running app.'];const tips=[];(session.items||[]).forEach(item=>{const p=progressionInfo(item,session.id);const best=bestCompletedSet(item);if(best&&p.previous){const now=estimated1RM(best.weight,best.reps),old=estimated1RM(p.previous.weight,p.previous.reps);if(now>old+0.5)tips.push(`${item.name}: performance moved up.`)}});return tips.slice(0,2).length?tips.slice(0,2):['Session logged. Your next target will use this performance as the new reference.']}
+function openCoachWhy(){
+ const c=getCoachInsight(),check=latestCoachCheckin(),n=c.nutrition,w=c.weight,t=c.training;
+ const weightLine=w.trend?.enough?`${w.trend.pctWeek>=0?'+':''}${w.trend.pctWeek.toFixed(2)}%/week · ${w.trend.rows} weigh-ins`:'Not enough trend data yet';
+ const volume=t.loads?.length?t.loads.map(x=>`<div><span>${escapeHtml(x.muscle)}</span><strong>${x.sets} sets / 7d</strong></div>`):'<p class="subtle">No planned strength muscles to analyse today.</p>';
+ openSheet(`<div class="sheet-head"><div><p class="eyebrow">GAYM Coach · Evidence mode</p><h2>${escapeHtml(c.headline)}</h2></div><button class="sheet-close" data-close>×</button></div><p class="subtle">This coach is deterministic: it reads your own logs and applies conservative evidence-based rules. It does not invent recovery percentages, diagnose injuries or pretend incomplete food logs are complete.</p><div class="coach-reasons"><div><span>PRIORITY</span><strong>${escapeHtml(c.topic)} · ${c.status.toUpperCase()}</strong></div><p>${escapeHtml(c.reason)}</p></div><section class="section"><p class="eyebrow">TRAINING</p><div class="bottom-why-card">${volume}</div><p>${escapeHtml(t.message)}</p></section><section class="section"><p class="eyebrow">NUTRITION</p><div class="bottom-why-card"><div><span>7-DAY LOG COVERAGE</span><strong>${n.week.loggedDays}/7 days</strong></div><div><span>AVG PROTEIN</span><strong>${n.week.loggedDays?`${Math.round(n.week.avgProtein)} g/day`:'—'}</strong></div><div><span>AVG ENERGY</span><strong>${n.week.loggedDays?`${Math.round(n.week.avgKcal)} kcal/day`:'—'}</strong></div><div><span>PROTEIN REFERENCE</span><strong>${n.proteinFloor}–${n.proteinUpper} g/day</strong></div></div><p>${escapeHtml(n.message)}</p></section><section class="section"><p class="eyebrow">BODY-WEIGHT TREND</p><div class="bottom-why-card"><div><span>TREND</span><strong>${escapeHtml(weightLine)}</strong></div><div><span>GOAL</span><strong>${escapeHtml(goalLabel(data.profile.goal))}</strong></div></div><p>${escapeHtml(w.message)}</p></section><section class="section"><p class="eyebrow">QUICK CHECK-IN</p><div class="coach-check-grid"><button data-feeling="great" class="small-btn ${check?.feeling==='great'?'active':''}">GREAT</button><button data-feeling="normal" class="small-btn ${check?.feeling==='normal'?'active':''}">NORMAL</button><button data-feeling="rough" class="small-btn ${check?.feeling==='rough'?'active':''}">ROUGH</button></div><div class="coach-check-grid soreness"><button data-soreness="none" class="small-btn ${check?.soreness==='none'?'active':''}">NO SORENESS</button><button data-soreness="some" class="small-btn ${check?.soreness==='some'?'active':''}">SOME</button><button data-soreness="a lot" class="small-btn ${check?.soreness==='a lot'?'active':''}">A LOT</button></div></section><section class="section"><p class="eyebrow">SCIENCE BASE</p><div class="coach-reasons"><p>• ${escapeHtml(COACH_EVIDENCE.training)}</p><p>• ${escapeHtml(COACH_EVIDENCE.protein)}</p><p>• ${escapeHtml(data.profile.goal==='lose'?COACH_EVIDENCE.loss:COACH_EVIDENCE.gain)}</p><p>• ${escapeHtml(COACH_EVIDENCE.effort)}</p></div><p class="science-note">Population research gives ranges, not guarantees. Individual response is judged from your multi-week weight and performance trends. Pain, illness, injury or persistent unusual fatigue belongs outside this algorithm and may need a qualified clinician or coach.</p></section>`);
+ let feeling=check?.feeling||'normal',soreness=check?.soreness||'none';function commit(){data.coachCheckins=(data.coachCheckins||[]).filter(x=>x.date!==isoToday());data.coachCheckins.push({date:isoToday(),feeling,soreness,at:Date.now()});save();openCoachWhy()}$$('[data-feeling]').forEach(b=>b.onclick=()=>{feeling=b.dataset.feeling;commit()});$$('[data-soreness]').forEach(b=>b.onclick=()=>{soreness=b.dataset.soreness;commit()})
+}
+function weekCoachReview(){
+ const week=thisWeekSessions(),strength=week.filter(s=>s.type!=='cardio'&&s.type!=='group'),cardio=week.filter(s=>s.type==='cardio'),group=week.filter(s=>s.type==='group'),sets=strength.reduce((n,s)=>n+(s.doneSets||0),0),prs=strength.reduce((n,s)=>n+(s.prs?.length||0),0),vol=coachRecentMuscleVolume(7),entries=Object.entries(vol).sort((a,b)=>a[1]-b[1]),nut=coachNutritionWindow(7),wt=coachWeightRate();
+ const win=prs?`${prs} new PB${prs===1?'':'s'} this week.`:strength.length?`${strength.length} strength session${strength.length===1?'':'s'} logged.`:'No strength sessions logged yet.';
+ let watch=nut.loggedDays<3?'Nutrition trend needs more complete log days.':nut.avgProtein<Math.max(1.6*(Number(data.profile.weight)||70),(Number(data.profile.proteinTarget)||0)*.9)?`Protein averaged ${Math.round(nut.avgProtein)} g on logged days.`:entries.length?`${entries[0][0]} has ${entries[0][1]} direct sets across the last 7 days.`:'Keep logging sessions to build a volume picture.';
+ let next=wt.enough?`Weight trend: ${wt.pctWeek>=0?'+':''}${wt.pctWeek.toFixed(2)}%/week. Judge calories from this multi-week direction, not one weigh-in.`:'Add regular weigh-ins so the coach can judge whether calories match your goal.';
+ return {summary:`${week.length} workouts · ${sets} sets · ${cardio.length} cardio · ${prs} PB${prs===1?'':'s'}`,win,watch,next};
+}
+function sessionCoachSummary(session){
+ if(session.type==='cardio')return ['Cardio logged. The coach records it, but does not invent calorie burn from duration alone.'];
+ const tips=[];(session.items||[]).forEach(item=>{const p=progressionInfo(item,session.id),best=bestCompletedSet(item);if(best&&p.previous){const now=estimated1RM(best.weight,best.reps),old=estimated1RM(p.previous.weight,p.previous.reps);if(now>old*1.01)tips.push(`${item.name}: estimated performance improved versus the previous logged session.`)}});
+ return tips.slice(0,2).length?tips.slice(0,2):['Session logged. Progress will be judged across repeated performances, not from one workout alone.'];
+}
+
 function lastExerciseSession(name,excludeSessionId=''){
  const key=String(name||'').trim().toLowerCase();return sortedSessionsDesc().find(s=>s.id!==excludeSessionId&&s.completed!==false&&s.type!=='cardio'&&(s.items||[]).some(x=>String(x.name||'').trim().toLowerCase()===key))||null;
 }
@@ -2336,13 +2424,11 @@ function formatTimedSeconds(value){const sec=Math.max(0,Number(value)||0);if(sec
 function bestCompletedSet(item){return (item?.sets||[]).filter(z=>z.done!==false&&Number(z.weight)>0&&Number(z.reps)>0).sort((a,b)=>estimated1RM(Number(b.weight),Number(b.reps))-estimated1RM(Number(a.weight),Number(a.reps)))[0]||null}
 function targetRepTop(target=''){const nums=String(target).match(/\d+/g)||[];return nums.length?Number(nums.at(-1)):null}
 function progressionInfo(item,excludeSessionId=''){
- const previous=lastExerciseSession(item.name,excludeSessionId);if(!previous)return {previous:null,hint:'First logged session. Set the baseline.'};
- const prevItem=exerciseItemInSession(previous,item.name),best=bestCompletedSet(prevItem);if(!best)return {previous:null,hint:'Previous session found. Add weight and reps to start comparisons.'};
- const top=targetRepTop(item.targetReps),done=(prevItem.sets||[]).filter(z=>z.done!==false&&Number(z.weight)>0&&Number(z.reps)>0),sameWeight=done.length&&done.every(z=>Number(z.weight)===Number(best.weight));
- const hitTop=top&&done.length&&done.every(z=>Number(z.reps)>=top);
- const step=Number(best.weight)>=40?2.5:1;
- const suggested=hitTop&&sameWeight?Math.round((Number(best.weight)+step)*2)/2:null;
- return {previous:{weight:Number(best.weight),reps:Number(best.reps),date:previous.date},hint:suggested?`Try ${suggested} kg today`:`Beat ${Number(best.weight)} kg × ${Number(best.reps)}`};
+ const previous=lastExerciseSession(item.name,excludeSessionId);if(!previous)return {previous:null,hint:'First logged session. Build a clean baseline.'};
+ const prevItem=exerciseItemInSession(previous,item.name),best=bestCompletedSet(prevItem);if(!best)return {previous:null,hint:'Log working-set weight and reps to unlock progression.'};
+ const top=targetRepTop(item.targetReps),done=(prevItem.sets||[]).filter(z=>z.done!==false&&Number(z.weight)>0&&Number(z.reps)>0),sameWeight=done.length&&done.every(z=>Math.abs(Number(z.weight)-Number(best.weight))<.001),hitTop=top&&done.length&&done.every(z=>Number(z.reps)>=top),base=Number(best.weight);
+ const rawStep=Math.max(.5,base*.025),step=Math.max(.5,Math.round(rawStep*2)/2),suggested=hitTop&&sameWeight?Math.round((base+step)*2)/2:null;
+ return {previous:{weight:base,reps:Number(best.reps),date:previous.date},hint:suggested?`Top of rep range reached: try ${suggested} kg with clean reps`:`Match ${base} kg and add a rep where technique stays solid`};
 }
 function nextTimeSummary(session){
  if(!session||session.type==='cardio')return [];
