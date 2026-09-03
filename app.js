@@ -281,16 +281,32 @@ async function syncNutritionCloud(expectedUserId=activeDataUserId,{quiet=false,p
 function accountDataUpdatedAt(payload=data){return Math.max(0,Number(payload?.updatedAt)||0)}
 function remoteAccountUpdatedAt(remote){return Math.max(0,new Date(remote?.updated_at||0).getTime()||0)}
 function hasAccountContent(payload=data){return ['customWorkouts','customPrograms','sessions','measurements','nutrition','recipeFavorites','customRecipes','planned','bottomCheckins'].some(key=>Array.isArray(payload?.[key])&&payload[key].length)}
+function mergeLatestLocalCriticalState(storedPayload,currentPayload=data){
+ const stored=storedPayload&&typeof storedPayload==='object'?storedPayload:{},current=currentPayload&&typeof currentPayload==='object'?currentPayload:{};
+ // Multi-tab safety: stale Safari tabs may never remove newer nutrition/workout records simply because they do not know about them yet.
+ const mergedNutrition=mergeNutritionSync(stored,current);
+ const mergedSessions=mergeRecoveryArray('sessions',stored.sessions,current.sessions);
+ return {...current,
+  nutrition:mergedNutrition.nutrition,
+  nutritionDeletedIds:mergedNutrition.nutritionDeletedIds,
+  foodFavorites:mergedNutrition.foodFavorites,
+  savedMeals:mergedNutrition.savedMeals,
+  sessions:mergedSessions
+ };
+}
 function persistLocalAccountData(){
  try{
-  const key=accountLocalKey(activeDataUserId),next=JSON.stringify(data),previous=key?localStorage.getItem(key):null;
+  const key=accountLocalKey(activeDataUserId),previous=key?localStorage.getItem(key):null;
   if(previous&&key){
    try{
-    const oldData=JSON.parse(previous),oldSessions=(oldData?.sessions||[]).map(x=>x?.id).filter(Boolean).join('|'),newSessions=(data?.sessions||[]).map(x=>x?.id).filter(Boolean).join('|');
-    if(oldSessions!==newSessions)localStorage.setItem(localBackupKey(activeDataUserId),previous);
+    const oldData=JSON.parse(previous);
+    data=mergeLatestLocalCriticalState(oldData,data);
+    const oldSessions=(oldData?.sessions||[]).map(x=>x?.id).filter(Boolean).join('|'),newSessions=(data?.sessions||[]).map(x=>x?.id).filter(Boolean).join('|');
+    const oldNutrition=nutritionSyncHash(oldData),newNutrition=nutritionSyncHash(data);
+    if(oldSessions!==newSessions||oldNutrition!==newNutrition)localStorage.setItem(localBackupKey(activeDataUserId),previous);
    }catch{}
   }
-  localStorage.setItem(key,next);return true;
+  localStorage.setItem(key,JSON.stringify(data));return true;
  }catch(e){console.error('save local account data',e);return false}
 }
 function syncStatusView(){
@@ -372,7 +388,8 @@ async function repairCloudWorkoutHistory(){
 }
 async function hydrateCloudAccountData(expectedUserId=activeDataUserId){
  if(!expectedUserId||authUser?.id!==expectedUserId||activeDataUserId!==expectedUserId)return;
- // v98 local-first: NEVER hydrate the whole account payload. Only nutrition is merged by item ID/tombstone.
+ // v104: nutrition may merge across devices on sign-in, but persistence is multi-tab-safe.
+ // Remote data is union-merged by item ID/tombstone and can no longer overwrite newer records stored by another Safari tab.
  await syncNutritionCloud(expectedUserId,{quiet:true});
  if(authUser?.id!==expectedUserId||activeDataUserId!==expectedUserId)return;
  cloudDataHydrated=true;
@@ -3350,5 +3367,5 @@ function startSocialNotificationPolling(){if(socialNotificationPoll)clearInterva
 function startAccountSyncPolling(){if(accountSyncPoll)clearInterval(accountSyncPoll);accountSyncPoll=null}
 
 function render(){evaluateNotifications();stopWorkoutClock();if(!entryUnlocked)return entry();if(route==='home')home();else if(route==='plan')plan();else if(route==='workout')workout();else if(route==='active')active();else if(route==='progress')progress();else if(route==='nutrition')nutrition();else if(route==='social')social();else if(route==='chat')chatPage();else if(route==='profile')profile();else home();}
-migrateProfile();if('scrollRestoration'in history)history.scrollRestoration='manual';window.addEventListener('beforeunload',persistActiveSession);window.addEventListener('pagehide',persistActiveSession);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistActiveSession();else if(route==='active'&&data.activeSession)render()});window.addEventListener('offline',()=>{if(authUser)setCloudSyncState('local')});window.addEventListener('online',()=>{if(authUser)setCloudSyncState('local')});if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=102-meal-builder',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));render();initializeCloud();
+migrateProfile();if('scrollRestoration'in history)history.scrollRestoration='manual';window.addEventListener('beforeunload',persistActiveSession);window.addEventListener('pagehide',persistActiveSession);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistActiveSession();else if(route==='active'&&data.activeSession)render()});window.addEventListener('offline',()=>{if(authUser)setCloudSyncState('local')});window.addEventListener('online',()=>{if(authUser)setCloudSyncState('local')});if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=104-nutrition-tab-safe',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));render();initializeCloud();
 })();
