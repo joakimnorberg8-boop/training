@@ -1,11 +1,22 @@
 (()=>{
 'use strict';
-// GAYM v106: coach + BottomCheck live status and equipment-safe Beginner workouts.
+// GAYM v107: login recovery + v106 coach/BottomCheck/beginner fixes.
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 
 const SUPABASE_URL='https://dkiejeckkwzowpkxapbc.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_eJGKDkbbHEU5UVfDPVVNRQ_OUPWKaVZ';
-const sb=window.supabase?.createClient?.(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}})||null;
+let sb=window.supabase?.createClient?.(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}})||null;
+async function ensureSupabaseClient(){
+ if(sb)return sb;
+ const urls=['https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2','https://unpkg.com/@supabase/supabase-js@2'];
+ for(const src of urls){
+  try{
+   await new Promise((resolve,reject)=>{const old=document.querySelector(`script[data-supabase-retry=\"${src}\"]`);if(old){old.addEventListener('load',resolve,{once:true});old.addEventListener('error',reject,{once:true});return}const el=document.createElement('script');el.src=src;el.dataset.supabaseRetry=src;el.onload=resolve;el.onerror=reject;document.head.appendChild(el)});
+   if(window.supabase?.createClient){sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});return sb}
+  }catch(e){console.warn('Supabase loader failed',src,e)}
+ }
+ return null;
+}
 let authUser=null,cloudProfile=null,cloudBooting=true,authMode='login',socialTab='activity';
 const activityPostCache=new Map();
 const SOCIAL_PROFILE_CACHE_PREFIX='gaymSocialProfileV2:user:';
@@ -2983,7 +2994,8 @@ async function prepareAvatarImage(file){
 }
 function usernameClean(v=''){return String(v).trim().toLowerCase().replace(/[^a-z0-9._]/g,'').slice(0,30)}
 async function submitAuth(){
- if(!sb)return toast('Backend could not load. Check your internet connection.');
+ if(!sb){const btn0=$('#auth-submit');if(btn0){btn0.disabled=true;btn0.textContent='CONNECTING…'}await ensureSupabaseClient();if(btn0){btn0.disabled=false;btn0.textContent=authMode==='create'?'CREATE ACCOUNT':'LOG IN'}}
+ if(!sb)return toast('Could not connect to login service. Check internet and try again.');
  const email=$('#auth-email')?.value.trim(),password=$('#auth-password')?.value||'';
  if(!email||password.length<8)return toast('Add a valid email and an 8+ character password.');
  const btn=$('#auth-submit');btn.disabled=true;btn.textContent='PLEASE WAIT…';
@@ -3008,6 +3020,7 @@ async function submitAuth(){
  finally{if(btn){btn.disabled=false;btn.textContent=authMode==='create'?'CREATE ACCOUNT':'LOG IN'}}
 }
 async function sendPasswordReset(){
+ if(!sb)await ensureSupabaseClient();if(!sb)return toast('Could not connect to login service.');
  const email=$('#auth-email')?.value.trim();if(!email)return toast('Enter your email first.');
  const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:location.href.split('#')[0]});
  toast(error?error.message:'Password reset email sent.');
@@ -3036,6 +3049,7 @@ function leaveAuthenticatedAccount(){
  ++authEpoch;clearTimeout(cloudSyncTimer);clearTimeout(cloudSyncRetryTimer);clearTimeout(nutritionSyncTimer);cloudSyncRetryCount=0;cloudDataHydrated=false;authUser=null;activeDataUserId=null;cloudProfile=null;cloudSyncMeta={dirty:false,lastRemoteUpdatedAt:0,lastSyncedAt:0,lastLocalHash:'',lastSyncedHash:'',lastRemoteSessionCount:0};setCloudSyncState('idle');activityPostCache.clear();socialTab='activity';data=structuredClone(defaults);normalizeLocalData();entryUnlocked=false;socialCache={friends:[],requests:[],feed:[],nightOuts:[],sharedRecipes:[],notifications:[]};socialCacheUpdatedAt=0;socialLoadPromise=null;resetRecipeCloudState();resetWorkoutShareState();route='home';routeArgs={};
 }
 async function initializeCloud(){
+ if(!sb)await ensureSupabaseClient();
  if(!sb){cloudBooting=false;render();return}
  try{
   const {data:r}=await sb.auth.getSession();
@@ -3418,5 +3432,5 @@ function startSocialNotificationPolling(){if(socialNotificationPoll)clearInterva
 function startAccountSyncPolling(){if(accountSyncPoll)clearInterval(accountSyncPoll);accountSyncPoll=null}
 
 function render(){evaluateNotifications();stopWorkoutClock();if(!entryUnlocked)return entry();if(route==='home')home();else if(route==='plan')plan();else if(route==='workout')workout();else if(route==='active')active();else if(route==='progress')progress();else if(route==='nutrition')nutrition();else if(route==='social')social();else if(route==='chat')chatPage();else if(route==='profile')profile();else home();}
-migrateProfile();if('scrollRestoration'in history)history.scrollRestoration='manual';window.addEventListener('beforeunload',persistActiveSession);window.addEventListener('pagehide',persistActiveSession);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistActiveSession();else{const changed=refreshFromLatestLocal({rerender:false});if(changed||route==='active')render()}});window.addEventListener('storage',e=>{if(!activeDataUserId||e.key!==accountLocalKey(activeDataUserId)||!e.newValue)return;refreshFromLatestLocal({rerender:true})});window.addEventListener('pageshow',e=>{if(e.persisted)refreshFromLatestLocal({rerender:true})});window.addEventListener('offline',()=>{if(authUser)setCloudSyncState('local')});window.addEventListener('online',()=>{if(authUser)setCloudSyncState('local')});if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=106-coach-beginner-fix',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));render();initializeCloud();
+migrateProfile();if('scrollRestoration'in history)history.scrollRestoration='manual';window.addEventListener('beforeunload',persistActiveSession);window.addEventListener('pagehide',persistActiveSession);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistActiveSession();else{const changed=refreshFromLatestLocal({rerender:false});if(changed||route==='active')render()}});window.addEventListener('storage',e=>{if(!activeDataUserId||e.key!==accountLocalKey(activeDataUserId)||!e.newValue)return;refreshFromLatestLocal({rerender:true})});window.addEventListener('pageshow',e=>{if(e.persisted)refreshFromLatestLocal({rerender:true})});window.addEventListener('offline',()=>{if(authUser)setCloudSyncState('local')});window.addEventListener('online',()=>{if(authUser)setCloudSyncState('local')});if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=107-login-recovery',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));render();initializeCloud();
 })();
