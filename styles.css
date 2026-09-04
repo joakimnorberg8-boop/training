@@ -785,3 +785,23 @@ body{background:
 
 /* v103 shared custom workouts */
 .community-workout-section{margin-top:22px}.shared-workout-search{margin:11px 0}.shared-workout-search input{width:100%}.shared-workout-template-list{margin-top:10px}.shared-workout-template-card{width:100%;color:inherit;text-align:left;cursor:pointer}.shared-template-kicker{display:block;margin-bottom:3px;color:var(--cyan);font-size:7px;font-weight:900;letter-spacing:.09em}.shared-workout-notes{margin:-2px 0 14px;padding:11px 12px;border:1px solid var(--line);border-radius:13px;background:var(--panel)}.workout-visibility-picker{margin-bottom:14px}.community-workout-section .loading-card{display:flex;align-items:center;gap:10px;padding:14px}.community-workout-section .loading-card p{margin:0;color:var(--muted);font-size:10px}
+
+
+/* v106: clearer live Coach/BottomCheck status + equipment-fit indicators */
+.coach-home-topline{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%}
+.coach-status-badge{font-style:normal;font-size:10px;font-weight:900;letter-spacing:.08em;padding:4px 7px;border-radius:999px;border:1px solid var(--line);white-space:nowrap}
+.coach-status-badge.ready{color:var(--cyan);background:color-mix(in srgb,var(--cyan) 10%,transparent)}
+.coach-status-badge.caution{color:#ffd166;background:rgba(255,209,102,.08)}
+.coach-status-badge.recovery{color:var(--pink);background:color-mix(in srgb,var(--pink) 10%,transparent)}
+.coach-home-copy i{display:block;margin-top:5px;font-style:normal;font-size:11px;color:var(--muted)}
+.bottom-home-card.good{box-shadow:inset 3px 0 0 var(--cyan)}
+.bottom-home-card.maybe{box-shadow:inset 3px 0 0 #ffd166}
+.bottom-home-card.wait{box-shadow:inset 3px 0 0 var(--pink)}
+.bottom-home-status.unknown{opacity:.8}
+.beginner-setup-summary{margin:0 0 12px;padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:var(--panel2);display:flex;flex-direction:column;gap:3px}
+.beginner-setup-summary strong{font-size:13px}.beginner-setup-summary span{font-size:11px;color:var(--muted)}
+.beginner-program-title-row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.setup-fit{font-size:9px;font-weight:900;letter-spacing:.06em;border:1px solid var(--line);border-radius:999px;padding:4px 6px}
+.setup-fit.good{color:var(--cyan)}.setup-fit.warn{color:#ffd166}
+.beginner-missing-slot{padding:10px 12px;border:1px dashed var(--line);border-radius:12px;display:flex;flex-direction:column;gap:3px;margin-top:7px}
+.beginner-missing-slot strong{font-size:12px}.beginner-missing-slot span{font-size:11px;color:var(--muted)}
