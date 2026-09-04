@@ -1,6 +1,6 @@
 (()=>{
 'use strict';
-// GAYM v108: auth timeout recovery + v107 login recovery + v106 fixes.
+// GAYM v110: direct Supabase Auth REST login + auth recovery.
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 
 const SUPABASE_URL='https://dkiejeckkwzowpkxapbc.supabase.co';
@@ -3023,19 +3023,40 @@ async function submitAuth(){
    }
    if(!res.session){authMode='login';entry();return toast('Account created. Confirm your email, then log in.');}
   }else{
-   const result=await withTimeout(sb.auth.signInWithPassword({email,password}),15000,'Supabase login');
-   if(result?.error)throw result.error;
-   const user=result?.data?.user||result?.data?.session?.user;
-   if(!user)throw new Error('Supabase accepted the request but returned no user session.');
-   // Do not rely only on onAuthStateChange. Enter the account immediately from the login result.
-   await enterAuthenticatedAccount(user);
+   // v110: authenticate directly against Supabase Auth REST. This avoids a client-side
+   // signInWithPassword/onAuthStateChange race and lets us surface the real HTTP error.
+   const controller=new AbortController();
+   const timer=setTimeout(()=>controller.abort(),15000);
+   let response,payload;
+   try{
+    response=await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`,{
+     method:'POST',
+     headers:{'apikey':SUPABASE_PUBLISHABLE_KEY,'Content-Type':'application/json'},
+     body:JSON.stringify({email,password}),
+     signal:controller.signal,
+     cache:'no-store'
+    });
+    const raw=await response.text();
+    try{payload=raw?JSON.parse(raw):{}}catch{payload={message:raw||`HTTP ${response.status}`}}
+   }catch(e){
+    if(e?.name==='AbortError')throw new Error('Supabase Auth timed out after 15 seconds.');
+    throw new Error(`Could not reach Supabase Auth: ${e?.message||e}`);
+   }finally{clearTimeout(timer)}
+   if(!response.ok){
+    const detail=payload?.msg||payload?.message||payload?.error_description||payload?.error||`HTTP ${response.status}`;
+    throw new Error(`Supabase Auth ${response.status}: ${detail}`);
+   }
+   if(!payload?.access_token||!payload?.refresh_token||!payload?.user?.id)throw new Error('Supabase Auth returned an incomplete session.');
+   const {error:setSessionError}=await withTimeout(sb.auth.setSession({access_token:payload.access_token,refresh_token:payload.refresh_token}),10000,'Saving login session');
+   if(setSessionError)throw setSessionError;
+   await enterAuthenticatedAccount(payload.user);
    cloudBooting=false;
    render();
   }
  }catch(err){
   console.error('submitAuth',err);
   const msg=String(err?.message||'Could not sign in.');
-  authError=msg.includes('timed out')?'Supabase did not answer the login request. This is a Supabase/network connection problem, not your password.':msg;
+  authError=msg;
   entry();
   toast(authError);
  }
@@ -3457,5 +3478,5 @@ function startSocialNotificationPolling(){if(socialNotificationPoll)clearInterva
 function startAccountSyncPolling(){if(accountSyncPoll)clearInterval(accountSyncPoll);accountSyncPoll=null}
 
 function render(){evaluateNotifications();stopWorkoutClock();if(!entryUnlocked)return entry();if(route==='home')home();else if(route==='plan')plan();else if(route==='workout')workout();else if(route==='active')active();else if(route==='progress')progress();else if(route==='nutrition')nutrition();else if(route==='social')social();else if(route==='chat')chatPage();else if(route==='profile')profile();else home();}
-migrateProfile();if('scrollRestoration'in history)history.scrollRestoration='manual';window.addEventListener('beforeunload',persistActiveSession);window.addEventListener('pagehide',persistActiveSession);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistActiveSession();else{const changed=refreshFromLatestLocal({rerender:false});if(changed||route==='active')render()}});window.addEventListener('storage',e=>{if(!activeDataUserId||e.key!==accountLocalKey(activeDataUserId)||!e.newValue)return;refreshFromLatestLocal({rerender:true})});window.addEventListener('pageshow',e=>{if(e.persisted)refreshFromLatestLocal({rerender:true})});window.addEventListener('offline',()=>{if(authUser)setCloudSyncState('local')});window.addEventListener('online',()=>{if(authUser)setCloudSyncState('local')});if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=109-auth-direct-login',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));render();initializeCloud();
+migrateProfile();if('scrollRestoration'in history)history.scrollRestoration='manual';window.addEventListener('beforeunload',persistActiveSession);window.addEventListener('pagehide',persistActiveSession);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistActiveSession();else{const changed=refreshFromLatestLocal({rerender:false});if(changed||route==='active')render()}});window.addEventListener('storage',e=>{if(!activeDataUserId||e.key!==accountLocalKey(activeDataUserId)||!e.newValue)return;refreshFromLatestLocal({rerender:true})});window.addEventListener('pageshow',e=>{if(e.persisted)refreshFromLatestLocal({rerender:true})});window.addEventListener('offline',()=>{if(authUser)setCloudSyncState('local')});window.addEventListener('online',()=>{if(authUser)setCloudSyncState('local')});if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=110-direct-auth-rest',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));render();initializeCloud();
 })();
