@@ -534,7 +534,6 @@ function entry(){
  <button class="primary entry-primary" id="auth-submit">${isCreate?'CREATE ACCOUNT':'LOG IN'}</button>
  ${!isCreate?`<button class="text-btn auth-forgot" id="auth-forgot">FORGOT PASSWORD?</button>`:''}
  ${authError?`<div class="auth-inline-error" role="alert"><strong>LOGIN ERROR</strong><span>${escapeHtml(authError)}</span></div>`:''}
- <div class="auth-inline-error" style="display:block;margin-top:12px"><strong>AUTH DEBUG v111</strong><div id="auth-debug-live">${authDebug.length?authDebug.map(x=>`<div>${escapeHtml(x)}</div>`).join(''):'<div>Ready. Tap LOG IN.</div>'}</div></div>
  <p class="entry-note">Your private body, nutrition and BottomCheck data is never shown to friends. Social sharing is controlled separately.</p></section></main>`;
  $$('[data-auth-mode]').forEach(b=>b.onclick=()=>{authMode=b.dataset.authMode;authError='';entry()});
  $('#auth-submit').onclick=submitAuth;
@@ -707,7 +706,6 @@ function recomputePRHistory({notifyNew=false}={}){
    data.unicornEvent={type:'pr',discoveredDate:isoToday(),sessionId:session.id,sessionDate:session.date,exercise:pr.name,weight:pr.weight,reps:pr.reps};
   }))
  }
- save();
 }
 function todaysNutritionStatus(){
  const foods=(data.nutrition||[]).filter(n=>n.date===isoToday()),kcal=foods.reduce((a,n)=>a+(+n.kcal||0),0),protein=foods.reduce((a,n)=>a+(+n.protein||0),0);
@@ -3507,5 +3505,5 @@ function startSocialNotificationPolling(){if(socialNotificationPoll)clearInterva
 function startAccountSyncPolling(){if(accountSyncPoll)clearInterval(accountSyncPoll);accountSyncPoll=null}
 
 function render(){evaluateNotifications();stopWorkoutClock();if(!entryUnlocked)return entry();if(route==='home')home();else if(route==='plan')plan();else if(route==='workout')workout();else if(route==='active')active();else if(route==='progress')progress();else if(route==='nutrition')nutrition();else if(route==='social')social();else if(route==='chat')chatPage();else if(route==='profile')profile();else home();}
-migrateProfile();if('scrollRestoration'in history)history.scrollRestoration='manual';window.addEventListener('beforeunload',persistActiveSession);window.addEventListener('pagehide',persistActiveSession);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistActiveSession();else{const changed=refreshFromLatestLocal({rerender:false});if(changed||route==='active')render()}});window.addEventListener('storage',e=>{if(!activeDataUserId||e.key!==accountLocalKey(activeDataUserId)||!e.newValue)return;refreshFromLatestLocal({rerender:true})});window.addEventListener('pageshow',e=>{if(e.persisted)refreshFromLatestLocal({rerender:true})});window.addEventListener('offline',()=>{if(authUser)setCloudSyncState('local')});window.addEventListener('online',()=>{if(authUser)setCloudSyncState('local')});if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=113-button-boot-fix',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));render();initializeCloud();
+migrateProfile();if('scrollRestoration'in history)history.scrollRestoration='manual';window.addEventListener('beforeunload',persistActiveSession);window.addEventListener('pagehide',persistActiveSession);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistActiveSession();else{const changed=refreshFromLatestLocal({rerender:false});if(changed||route==='active')render()}});window.addEventListener('storage',e=>{if(!activeDataUserId||e.key!==accountLocalKey(activeDataUserId)||!e.newValue)return;refreshFromLatestLocal({rerender:true})});window.addEventListener('pageshow',e=>{if(e.persisted)refreshFromLatestLocal({rerender:true})});window.addEventListener('offline',()=>{if(authUser)setCloudSyncState('local')});window.addEventListener('online',()=>{if(authUser)setCloudSyncState('local')});if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=114-account-recursion-fix',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));render();initializeCloud();
 })();
