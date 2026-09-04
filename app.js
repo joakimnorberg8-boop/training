@@ -1,10 +1,17 @@
 (()=>{
 'use strict';
-// GAYM v107: login recovery + v106 coach/BottomCheck/beginner fixes.
+// GAYM v108: auth timeout recovery + v107 login recovery + v106 fixes.
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 
 const SUPABASE_URL='https://dkiejeckkwzowpkxapbc.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_eJGKDkbbHEU5UVfDPVVNRQ_OUPWKaVZ';
+function withTimeout(promise,ms,label='Request'){
+ let timer;
+ return Promise.race([
+  Promise.resolve(promise).finally(()=>clearTimeout(timer)),
+  new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error(`${label} timed out. Check your connection and try again.`)),ms)})
+ ]);
+}
 let sb=window.supabase?.createClient?.(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}})||null;
 async function ensureSupabaseClient(){
  if(sb)return sb;
@@ -17,7 +24,7 @@ async function ensureSupabaseClient(){
  }
  return null;
 }
-let authUser=null,cloudProfile=null,cloudBooting=true,authMode='login',socialTab='activity';
+let authUser=null,cloudProfile=null,cloudBooting=true,authMode='login',authError='',socialTab='activity';
 const activityPostCache=new Map();
 const SOCIAL_PROFILE_CACHE_PREFIX='gaymSocialProfileV2:user:';
 function cachedCloudProfile(userId){if(!userId)return null;try{const p=JSON.parse(localStorage.getItem(`${SOCIAL_PROFILE_CACHE_PREFIX}${userId}`)||'null');return p?.id===userId?p:null}catch{return null}}
@@ -509,8 +516,9 @@ function entry(){
  <div class="field"><label>Password</label><input id="auth-password" type="password" autocomplete="${isCreate?'new-password':'current-password'}" minlength="8" placeholder="At least 8 characters"></div>
  <button class="primary entry-primary" id="auth-submit">${isCreate?'CREATE ACCOUNT':'LOG IN'}</button>
  ${!isCreate?`<button class="text-btn auth-forgot" id="auth-forgot">FORGOT PASSWORD?</button>`:''}
+ ${authError?`<div class="auth-inline-error" role="alert"><strong>LOGIN ERROR</strong><span>${escapeHtml(authError)}</span></div>`:''}
  <p class="entry-note">Your private body, nutrition and BottomCheck data is never shown to friends. Social sharing is controlled separately.</p></section></main>`;
- $$('[data-auth-mode]').forEach(b=>b.onclick=()=>{authMode=b.dataset.authMode;entry()});
+ $$('[data-auth-mode]').forEach(b=>b.onclick=()=>{authMode=b.dataset.authMode;authError='';entry()});
  $('#auth-submit').onclick=submitAuth;
  if($('#auth-forgot'))$('#auth-forgot').onclick=sendPasswordReset;
 }
@@ -2994,10 +3002,11 @@ async function prepareAvatarImage(file){
 }
 function usernameClean(v=''){return String(v).trim().toLowerCase().replace(/[^a-z0-9._]/g,'').slice(0,30)}
 async function submitAuth(){
+ authError='';
  if(!sb){const btn0=$('#auth-submit');if(btn0){btn0.disabled=true;btn0.textContent='CONNECTING…'}await ensureSupabaseClient();if(btn0){btn0.disabled=false;btn0.textContent=authMode==='create'?'CREATE ACCOUNT':'LOG IN'}}
- if(!sb)return toast('Could not connect to login service. Check internet and try again.');
+ if(!sb){authError='Supabase client could not load. Check the connection and reload the app.';entry();return}
  const email=$('#auth-email')?.value.trim(),password=$('#auth-password')?.value||'';
- if(!email||password.length<8)return toast('Add a valid email and an 8+ character password.');
+ if(!email||password.length<8){authError='Enter your email and a password with at least 8 characters.';entry();return}
  const btn=$('#auth-submit');btn.disabled=true;btn.textContent='PLEASE WAIT…';
  try{
   if(authMode==='create'){
@@ -3014,10 +3023,23 @@ async function submitAuth(){
    }
    if(!res.session){authMode='login';entry();return toast('Account created. Confirm your email, then log in.');}
   }else{
-   const {error}=await sb.auth.signInWithPassword({email,password});if(error)throw error;
+   const result=await withTimeout(sb.auth.signInWithPassword({email,password}),15000,'Supabase login');
+   if(result?.error)throw result.error;
+   const user=result?.data?.user||result?.data?.session?.user;
+   if(!user)throw new Error('Supabase accepted the request but returned no user session.');
+   // Do not rely only on onAuthStateChange. Enter the account immediately from the login result.
+   await enterAuthenticatedAccount(user);
+   cloudBooting=false;
+   render();
   }
- }catch(err){toast(err?.message||'Could not sign in.');}
- finally{if(btn){btn.disabled=false;btn.textContent=authMode==='create'?'CREATE ACCOUNT':'LOG IN'}}
+ }catch(err){
+  console.error('submitAuth',err);
+  const msg=String(err?.message||'Could not sign in.');
+  authError=msg.includes('timed out')?'Supabase did not answer the login request. This is a Supabase/network connection problem, not your password.':msg;
+  entry();
+  toast(authError);
+ }
+ finally{if(btn&&document.body.contains(btn)){btn.disabled=false;btn.textContent=authMode==='create'?'CREATE ACCOUNT':'LOG IN'}}
 }
 async function sendPasswordReset(){
  if(!sb)await ensureSupabaseClient();if(!sb)return toast('Could not connect to login service.');
@@ -3039,11 +3061,14 @@ async function enterAuthenticatedAccount(user){
  const token=++authEpoch,userId=user.id;
  clearTimeout(cloudSyncTimer);clearTimeout(cloudSyncRetryTimer);clearTimeout(nutritionSyncTimer);cloudSyncRetryCount=0;setCloudSyncState('idle');authUser=user;entryUnlocked=false;cloudDataHydrated=false;cloudProfile=cachedCloudProfile(userId);socialTab='activity';activityPostCache.clear();socialCache={friends:[],requests:[],feed:[],nightOuts:[],sharedRecipes:[],notifications:[]};socialCacheUpdatedAt=0;socialLoadPromise=null;resetRecipeCloudState();resetWorkoutShareState();
  switchAccountLocalData(userId);
- await hydrateCloudProfile(userId);
- await hydrateCloudAccountData(userId);
+ // Auth must never be blocked forever by an optional profile/nutrition cloud read.
+ try{await withTimeout(hydrateCloudProfile(userId),10000,'Profile sync')}catch(e){console.warn('Profile sync skipped during login',e)}
+ try{await withTimeout(hydrateCloudAccountData(userId),12000,'Account sync')}catch(e){console.warn('Account sync skipped during login',e);cloudDataHydrated=true;setCloudSyncState('local')}
  if(token!==authEpoch||authUser?.id!==userId||activeDataUserId!==userId)return;
  entryUnlocked=true;
- await Promise.all([syncRecentActivitiesFromLocal(userId),loadSocialNotifications(userId)]);
+ render();
+ // Social refresh is non-blocking. A slow feed must not hold the user on the login screen.
+ Promise.allSettled([syncRecentActivitiesFromLocal(userId),loadSocialNotifications(userId)]).then(()=>{if(authUser?.id===userId)render()});
 }
 function leaveAuthenticatedAccount(){
  ++authEpoch;clearTimeout(cloudSyncTimer);clearTimeout(cloudSyncRetryTimer);clearTimeout(nutritionSyncTimer);cloudSyncRetryCount=0;cloudDataHydrated=false;authUser=null;activeDataUserId=null;cloudProfile=null;cloudSyncMeta={dirty:false,lastRemoteUpdatedAt:0,lastSyncedAt:0,lastLocalHash:'',lastSyncedHash:'',lastRemoteSessionCount:0};setCloudSyncState('idle');activityPostCache.clear();socialTab='activity';data=structuredClone(defaults);normalizeLocalData();entryUnlocked=false;socialCache={friends:[],requests:[],feed:[],nightOuts:[],sharedRecipes:[],notifications:[]};socialCacheUpdatedAt=0;socialLoadPromise=null;resetRecipeCloudState();resetWorkoutShareState();route='home';routeArgs={};
@@ -3052,7 +3077,7 @@ async function initializeCloud(){
  if(!sb)await ensureSupabaseClient();
  if(!sb){cloudBooting=false;render();return}
  try{
-  const {data:r}=await sb.auth.getSession();
+  const {data:r}=await withTimeout(sb.auth.getSession(),10000,'Session check');
   if(r.session?.user)await enterAuthenticatedAccount(r.session.user);else leaveAuthenticatedAccount();
  }catch(e){console.error('initializeCloud',e);leaveAuthenticatedAccount()}finally{cloudBooting=false;render();startSocialNotificationPolling();startAccountSyncPolling()}
  sb.auth.onAuthStateChange((_event,session)=>{
@@ -3432,5 +3457,5 @@ function startSocialNotificationPolling(){if(socialNotificationPoll)clearInterva
 function startAccountSyncPolling(){if(accountSyncPoll)clearInterval(accountSyncPoll);accountSyncPoll=null}
 
 function render(){evaluateNotifications();stopWorkoutClock();if(!entryUnlocked)return entry();if(route==='home')home();else if(route==='plan')plan();else if(route==='workout')workout();else if(route==='active')active();else if(route==='progress')progress();else if(route==='nutrition')nutrition();else if(route==='social')social();else if(route==='chat')chatPage();else if(route==='profile')profile();else home();}
-migrateProfile();if('scrollRestoration'in history)history.scrollRestoration='manual';window.addEventListener('beforeunload',persistActiveSession);window.addEventListener('pagehide',persistActiveSession);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistActiveSession();else{const changed=refreshFromLatestLocal({rerender:false});if(changed||route==='active')render()}});window.addEventListener('storage',e=>{if(!activeDataUserId||e.key!==accountLocalKey(activeDataUserId)||!e.newValue)return;refreshFromLatestLocal({rerender:true})});window.addEventListener('pageshow',e=>{if(e.persisted)refreshFromLatestLocal({rerender:true})});window.addEventListener('offline',()=>{if(authUser)setCloudSyncState('local')});window.addEventListener('online',()=>{if(authUser)setCloudSyncState('local')});if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=107-login-recovery',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));render();initializeCloud();
+migrateProfile();if('scrollRestoration'in history)history.scrollRestoration='manual';window.addEventListener('beforeunload',persistActiveSession);window.addEventListener('pagehide',persistActiveSession);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistActiveSession();else{const changed=refreshFromLatestLocal({rerender:false});if(changed||route==='active')render()}});window.addEventListener('storage',e=>{if(!activeDataUserId||e.key!==accountLocalKey(activeDataUserId)||!e.newValue)return;refreshFromLatestLocal({rerender:true})});window.addEventListener('pageshow',e=>{if(e.persisted)refreshFromLatestLocal({rerender:true})});window.addEventListener('offline',()=>{if(authUser)setCloudSyncState('local')});window.addEventListener('online',()=>{if(authUser)setCloudSyncState('local')});if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=109-auth-direct-login',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));render();initializeCloud();
 })();
