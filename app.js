@@ -1,6 +1,6 @@
 (()=>{
 'use strict';
-// GAYM v110: direct Supabase Auth REST login + auth recovery.
+// GAYM v113: non-blocking app boot + direct Supabase auth recovery.
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 
 const SUPABASE_URL='https://dkiejeckkwzowpkxapbc.supabase.co';
@@ -13,18 +13,35 @@ function withTimeout(promise,ms,label='Request'){
  ]);
 }
 let sb=window.supabase?.createClient?.(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}})||null;
+function loadExternalScript(src,marker,timeoutMs=6000){
+ return new Promise((resolve,reject)=>{
+  const existing=document.querySelector(`script[data-gaym-lib=\"${marker}\"]`);
+  if(existing?.dataset.loaded==='1')return resolve();
+  const el=existing||document.createElement('script');
+  let done=false;
+  const finish=(err)=>{if(done)return;done=true;clearTimeout(timer);if(err)reject(err);else{el.dataset.loaded='1';resolve()}};
+  const timer=setTimeout(()=>finish(new Error(`${marker} library timed out`)),timeoutMs);
+  el.addEventListener('load',()=>finish(),{once:true});
+  el.addEventListener('error',()=>finish(new Error(`${marker} library failed to load`)),{once:true});
+  if(!existing){el.src=src;el.async=true;el.dataset.gaymLib=marker;document.head.appendChild(el)}
+ });
+}
 async function ensureSupabaseClient(){
  if(sb)return sb;
  const urls=['https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2','https://unpkg.com/@supabase/supabase-js@2'];
- for(const src of urls){
+ for(let i=0;i<urls.length;i++){
   try{
-   await new Promise((resolve,reject)=>{const old=document.querySelector(`script[data-supabase-retry=\"${src}\"]`);if(old){old.addEventListener('load',resolve,{once:true});old.addEventListener('error',reject,{once:true});return}const el=document.createElement('script');el.src=src;el.dataset.supabaseRetry=src;el.onload=resolve;el.onerror=reject;document.head.appendChild(el)});
+   await loadExternalScript(urls[i],`supabase-${i+1}`,6000);
    if(window.supabase?.createClient){sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});return sb}
-  }catch(e){console.warn('Supabase loader failed',src,e)}
+  }catch(e){console.warn('Supabase loader failed',urls[i],e)}
  }
  return null;
 }
-let authUser=null,cloudProfile=null,cloudBooting=true,authMode='login',authError='',socialTab='activity';
+let authUser=null,cloudProfile=null,cloudBooting=true,authMode='login',authError='',authDebug=[],socialTab='activity';
+function authTrace(msg){const line=`${new Date().toLocaleTimeString()} · ${String(msg)}`;authDebug=[...authDebug.slice(-7),line];console.log('[AUTH]',line);try{localStorage.setItem('gaymAuthDebugV111',JSON.stringify(authDebug))}catch{};const box=document.querySelector('#auth-debug-live');if(box)box.innerHTML=authDebug.map(x=>`<div>${escapeHtml(x)}</div>`).join('')}
+try{authDebug=JSON.parse(localStorage.getItem('gaymAuthDebugV111')||'[]')}catch{authDebug=[]}
+window.addEventListener('error',e=>authTrace(`JS ERROR: ${e.message||'unknown error'}`));
+window.addEventListener('unhandledrejection',e=>authTrace(`PROMISE ERROR: ${e.reason?.message||e.reason||'unknown rejection'}`));
 const activityPostCache=new Map();
 const SOCIAL_PROFILE_CACHE_PREFIX='gaymSocialProfileV2:user:';
 function cachedCloudProfile(userId){if(!userId)return null;try{const p=JSON.parse(localStorage.getItem(`${SOCIAL_PROFILE_CACHE_PREFIX}${userId}`)||'null');return p?.id===userId?p:null}catch{return null}}
@@ -517,6 +534,7 @@ function entry(){
  <button class="primary entry-primary" id="auth-submit">${isCreate?'CREATE ACCOUNT':'LOG IN'}</button>
  ${!isCreate?`<button class="text-btn auth-forgot" id="auth-forgot">FORGOT PASSWORD?</button>`:''}
  ${authError?`<div class="auth-inline-error" role="alert"><strong>LOGIN ERROR</strong><span>${escapeHtml(authError)}</span></div>`:''}
+ <div class="auth-inline-error" style="display:block;margin-top:12px"><strong>AUTH DEBUG v111</strong><div id="auth-debug-live">${authDebug.length?authDebug.map(x=>`<div>${escapeHtml(x)}</div>`).join(''):'<div>Ready. Tap LOG IN.</div>'}</div></div>
  <p class="entry-note">Your private body, nutrition and BottomCheck data is never shown to friends. Social sharing is controlled separately.</p></section></main>`;
  $$('[data-auth-mode]').forEach(b=>b.onclick=()=>{authMode=b.dataset.authMode;authError='';entry()});
  $('#auth-submit').onclick=submitAuth;
@@ -2862,10 +2880,13 @@ function openNutritionSearch(initial='',{onSelect=null}={}){
 function offProductToFood(code,p){const n=p?.nutriments||{},kcal=Number(n['energy-kcal_100g']??n['energy-kcal']);const kj=Number(n['energy-kj_100g']??n['energy_100g']);const finalKcal=Number.isFinite(kcal)?kcal:(Number.isFinite(kj)?kj/4.184:NaN);if(!Number.isFinite(finalKcal))return null;const quantityText=String(p?.quantity||'').toLowerCase(),productUnit=String(p?.product_quantity_unit||'').toLowerCase(),unit=productUnit==='ml'||(!productUnit&&/(?:^|\s)(?:ml|cl|dl|l)(?:\s|$)/.test(quantityText))?'ml':'g';return {id:`off:${code}`,source:'openfoodfacts',sourceId:String(code),name:String(p.product_name||p.generic_name||`Barcode ${code}`),brand:String(p.brands||''),unit,per100:{kcal:n1(finalKcal),protein:n1(n.proteins_100g),carbs:n1(n.carbohydrates_100g),fat:n1(n.fat_100g),fiber:n1(n.fiber_100g)}}}
 async function lookupBarcodeProduct(code){const clean=String(code||'').replace(/\D/g,'');if(clean.length<8)throw new Error('That barcode looks too short.');const fields='code,product_name,generic_name,brands,nutriments,nutrition_data_per,serving_size,quantity,product_quantity_unit';const r=await fetch(`${OFF_PRODUCT_URL}${encodeURIComponent(clean)}.json?fields=${fields}`,{cache:'no-store'});if(!r.ok)throw new Error(`Product lookup returned ${r.status}`);const j=await r.json();if(j.status!==1||!j.product)throw new Error('Product not found in Open Food Facts.');const f=offProductToFood(clean,j.product);if(!f)throw new Error('This product has no usable calories per 100 g.');return f}
 async function stopBarcodeScanner(){if(!activeBarcodeScanner)return;const s=activeBarcodeScanner;activeBarcodeScanner=null;try{const state=typeof s.getState==='function'?s.getState():null;if(state===2||state===3||state==null)await s.stop()}catch{}try{await s.clear()}catch{}}
-function openBarcodeScanner({onSelect=null}={}){
+async function openBarcodeScanner({onSelect=null}={}){
  openSheet(`<div class="sheet-head"><div><p class="eyebrow">Barcode</p><h2>Scan package</h2></div><button class="sheet-close" data-close>×</button></div><div class="barcode-camera-shell"><div id="barcode-reader" class="barcode-reader"></div><div class="barcode-scan-frame" aria-hidden="true"><i></i></div><div id="barcode-camera-status" class="barcode-camera-status">Starting rear camera…</div></div><div class="barcode-manual"><div class="field"><label>Enter barcode instead</label><input id="barcode-code" inputmode="numeric" autocomplete="off" placeholder="EAN / UPC"></div><button class="secondary" id="barcode-lookup">LOOK UP</button></div><p class="science-note">The scanner always requests the rear camera. Product nutrition comes from Open Food Facts; you choose the amount before it is added to your meal.</p>`);
  const lookup=async code=>{const btn=$('#barcode-lookup');if(btn){btn.disabled=true;btn.textContent='LOOKING UP…'}try{const food=await lookupBarcodeProduct(code);await stopBarcodeScanner();closeSheet();openFoodPortionSheet(food,onSelect?{onAdd:onSelect,returnToBuilder:true}:{})}catch(e){toast(e.message||'Could not find product');if(btn){btn.disabled=false;btn.textContent='LOOK UP'}}};$('#barcode-lookup').onclick=()=>lookup($('#barcode-code').value);
  const status=$('#barcode-camera-status');
+ if(!globalThis.Html5Qrcode){
+  try{if(status)status.textContent='Loading camera scanner…';await loadExternalScript('https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js','html5-qrcode',7000)}catch(e){console.warn('Barcode library load failed',e)}
+ }
  if(globalThis.Html5Qrcode){
   try{
    const formats=globalThis.Html5QrcodeSupportedFormats?[Html5QrcodeSupportedFormats.EAN_13,Html5QrcodeSupportedFormats.EAN_8,Html5QrcodeSupportedFormats.UPC_A,Html5QrcodeSupportedFormats.UPC_E]:undefined;
@@ -3002,12 +3023,12 @@ async function prepareAvatarImage(file){
 }
 function usernameClean(v=''){return String(v).trim().toLowerCase().replace(/[^a-z0-9._]/g,'').slice(0,30)}
 async function submitAuth(){
- authError='';
- if(!sb){const btn0=$('#auth-submit');if(btn0){btn0.disabled=true;btn0.textContent='CONNECTING…'}await ensureSupabaseClient();if(btn0){btn0.disabled=false;btn0.textContent=authMode==='create'?'CREATE ACCOUNT':'LOG IN'}}
- if(!sb){authError='Supabase client could not load. Check the connection and reload the app.';entry();return}
+ authError='';authDebug=[];authTrace('LOG IN tapped');
+ if(!sb){authTrace('Supabase JS client missing; loading fallback CDN');const btn0=$('#auth-submit');if(btn0){btn0.disabled=true;btn0.textContent='CONNECTING…'}await ensureSupabaseClient();if(btn0){btn0.disabled=false;btn0.textContent=authMode==='create'?'CREATE ACCOUNT':'LOG IN'}}
+ if(!sb){authTrace('STOP: Supabase JS client unavailable');authError='Supabase client could not load. Check the connection and reload the app.';entry();return}
  const email=$('#auth-email')?.value.trim(),password=$('#auth-password')?.value||'';
  if(!email||password.length<8){authError='Enter your email and a password with at least 8 characters.';entry();return}
- const btn=$('#auth-submit');btn.disabled=true;btn.textContent='PLEASE WAIT…';
+ const btn=$('#auth-submit');btn.disabled=true;btn.textContent='PLEASE WAIT…';authTrace(`Client ready · ${SUPABASE_URL}`);
  try{
   if(authMode==='create'){
    const displayName=$('#auth-name').value.trim(),username=usernameClean($('#auth-username').value);
@@ -3029,6 +3050,7 @@ async function submitAuth(){
    const timer=setTimeout(()=>controller.abort(),15000);
    let response,payload;
    try{
+    authTrace('Sending password request to Supabase Auth…');
     response=await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`,{
      method:'POST',
      headers:{'apikey':SUPABASE_PUBLISHABLE_KEY,'Content-Type':'application/json'},
@@ -3036,25 +3058,32 @@ async function submitAuth(){
      signal:controller.signal,
      cache:'no-store'
     });
+    authTrace(`Auth HTTP status: ${response.status}`);
     const raw=await response.text();
     try{payload=raw?JSON.parse(raw):{}}catch{payload={message:raw||`HTTP ${response.status}`}}
    }catch(e){
     if(e?.name==='AbortError')throw new Error('Supabase Auth timed out after 15 seconds.');
     throw new Error(`Could not reach Supabase Auth: ${e?.message||e}`);
    }finally{clearTimeout(timer)}
-   if(!response.ok){
+   if(!response.ok){authTrace(`Auth rejected request (${response.status})`);
     const detail=payload?.msg||payload?.message||payload?.error_description||payload?.error||`HTTP ${response.status}`;
     throw new Error(`Supabase Auth ${response.status}: ${detail}`);
    }
    if(!payload?.access_token||!payload?.refresh_token||!payload?.user?.id)throw new Error('Supabase Auth returned an incomplete session.');
+   authTrace(`Password accepted · user ${payload.user.id.slice(0,8)}…`);
+   authTrace('Saving Supabase session…');
    const {error:setSessionError}=await withTimeout(sb.auth.setSession({access_token:payload.access_token,refresh_token:payload.refresh_token}),10000,'Saving login session');
    if(setSessionError)throw setSessionError;
+   authTrace('Session saved');
+   authTrace('Loading account…');
    await enterAuthenticatedAccount(payload.user);
+   authTrace('Account entered successfully');
    cloudBooting=false;
    render();
   }
  }catch(err){
   console.error('submitAuth',err);
+  authTrace(`FAILED: ${err?.name||'Error'} · ${err?.message||err}`);
   const msg=String(err?.message||'Could not sign in.');
   authError=msg;
   entry();
@@ -3478,5 +3507,5 @@ function startSocialNotificationPolling(){if(socialNotificationPoll)clearInterva
 function startAccountSyncPolling(){if(accountSyncPoll)clearInterval(accountSyncPoll);accountSyncPoll=null}
 
 function render(){evaluateNotifications();stopWorkoutClock();if(!entryUnlocked)return entry();if(route==='home')home();else if(route==='plan')plan();else if(route==='workout')workout();else if(route==='active')active();else if(route==='progress')progress();else if(route==='nutrition')nutrition();else if(route==='social')social();else if(route==='chat')chatPage();else if(route==='profile')profile();else home();}
-migrateProfile();if('scrollRestoration'in history)history.scrollRestoration='manual';window.addEventListener('beforeunload',persistActiveSession);window.addEventListener('pagehide',persistActiveSession);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistActiveSession();else{const changed=refreshFromLatestLocal({rerender:false});if(changed||route==='active')render()}});window.addEventListener('storage',e=>{if(!activeDataUserId||e.key!==accountLocalKey(activeDataUserId)||!e.newValue)return;refreshFromLatestLocal({rerender:true})});window.addEventListener('pageshow',e=>{if(e.persisted)refreshFromLatestLocal({rerender:true})});window.addEventListener('offline',()=>{if(authUser)setCloudSyncState('local')});window.addEventListener('online',()=>{if(authUser)setCloudSyncState('local')});if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=110-direct-auth-rest',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));render();initializeCloud();
+migrateProfile();if('scrollRestoration'in history)history.scrollRestoration='manual';window.addEventListener('beforeunload',persistActiveSession);window.addEventListener('pagehide',persistActiveSession);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')persistActiveSession();else{const changed=refreshFromLatestLocal({rerender:false});if(changed||route==='active')render()}});window.addEventListener('storage',e=>{if(!activeDataUserId||e.key!==accountLocalKey(activeDataUserId)||!e.newValue)return;refreshFromLatestLocal({rerender:true})});window.addEventListener('pageshow',e=>{if(e.persisted)refreshFromLatestLocal({rerender:true})});window.addEventListener('offline',()=>{if(authUser)setCloudSyncState('local')});window.addEventListener('online',()=>{if(authUser)setCloudSyncState('local')});if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js?v=113-button-boot-fix',{updateViaCache:'none'}).then(r=>r.update()).catch(()=>{}));render();initializeCloud();
 })();
